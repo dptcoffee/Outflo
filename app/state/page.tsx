@@ -1,5 +1,9 @@
 // app/state/page.tsx
-export default function State()  {
+export default function State() {
+  // v0 wiring — hard numbers to prove the seam
+  const todaysGain = 18.75;
+  const rolling365 = 1243.92;
+
   return (
     <main
       style={{
@@ -7,6 +11,7 @@ export default function State()  {
         backgroundColor: "black",
         color: "white",
         display: "grid",
+        gridTemplateRows: "1fr auto 2fr",
         placeItems: "center",
         padding: "max(24px, 6vh) 24px",
       }}
@@ -28,7 +33,7 @@ export default function State()  {
               fontVariantNumeric: "tabular-nums",
             }}
           >
-            +$0.00
+            {(todaysGain >= 0 ? "+" : "-") + "$" + Math.abs(todaysGain).toFixed(2)}
           </div>
         </div>
 
@@ -42,7 +47,7 @@ export default function State()  {
               fontVariantNumeric: "tabular-nums",
             }}
           >
-            $0.00
+            {"$" + rolling365.toFixed(2)}
           </div>
         </div>
       </section>
