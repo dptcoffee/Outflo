@@ -11,15 +11,15 @@ export function useSwipe(onLeft: () => void, onRight: () => void) {
 
   function onPointerUp(e: React.PointerEvent) {
     if (startX.current === null) return;
-
     const delta = e.clientX - startX.current;
     const threshold = 60;
 
-    if (delta < -threshold) onLeft(); // swipe left
-    if (delta > threshold) onRight(); // swipe right
+    if (delta < -threshold) onLeft();
+    if (delta > threshold) onRight();
 
     startX.current = null;
   }
 
   return { onPointerDown, onPointerUp };
 }
+

@@ -1,0 +1,92 @@
+"use client";
+
+import { ReactNode, useMemo } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useSwipe } from "./hooks/useSwipe";
+
+const ROUTES = ["/", "/state", "/state/merchant"];
+
+function idxOf(pathname: string) {
+  const i = ROUTES.indexOf(pathname);
+  return i === -1 ? 0 : i;
+}
+
+export default function SwipeShell({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const { left, right } = useMemo(() => {
+    const i = idxOf(pathname);
+    const left = ROUTES[Math.min(i + 1, ROUTES.length - 1)];  // swipe left -> next
+    const right = ROUTES[Math.max(i - 1, 0)];                  // swipe right -> prev
+    return { left, right };
+  }, [pathname]);
+
+  const swipe = useSwipe(
+    () => router.push(left),
+    () => router.push(right)
+  );
+
+  return (
+    <div
+      {...swipe}
+      style={{
+        minHeight: "100vh",
+        touchAction: "pan-y",   // allow vertical scroll, still detect horizontal swipe
+        position: "relative",
+      }}
+    >
+      {children}
+
+      {/* Bottom thumb nav */}
+      <nav
+        style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: 18,
+          display: "flex",
+          justifyContent: "center",
+          pointerEvents: "none",
+        }}
+      >
+        <div
+          style={{
+            pointerEvents: "auto",
+            display: "flex",
+            gap: 10,
+            padding: "10px 12px",
+            borderRadius: 999,
+            border: "1px solid rgba(255,255,255,0.10)",
+            background: "rgba(0,0,0,0.55)",
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          <Pill href="/" active={pathname === "/"} label="Home" />
+          <Pill href="/state" active={pathname === "/state"} label="Gain" />
+          <Pill href="/state/merchant" active={pathname === "/state/merchant"} label="365" />
+        </div>
+      </nav>
+    </div>
+  );
+}
+
+function Pill({ href, label, active }: { href: string; label: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      style={{
+        textDecoration: "none",
+        color: "white",
+        fontSize: 12,
+        opacity: active ? 1 : 0.55,
+        padding: "8px 12px",
+        borderRadius: 999,
+        border: active ? "1px solid rgba(255,255,255,0.20)" : "1px solid transparent",
+      }}
+    >
+      {label}
+    </Link>
+  );
+}
