@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSwipe } from "../hooks/useSwipe";
 
 export default function State() {
   const [budget, setBudget] = useState<string>("20");
