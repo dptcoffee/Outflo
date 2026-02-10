@@ -1,25 +1,19 @@
-import Link from "next/link";
+// app/page.tsx
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   return (
-    <Link
-      href="https://outflois.vercel.app/state"
+    <main
       style={{
-        display: "block",
-        minHeight: "0vh",
-        gridTemplateRows: "1fr auto 2fr",
+        minHeight: "100svh",
+        width: "100vw",
         backgroundColor: "black",
+        display: "grid",
+        placeItems: "center",
       }}
     >
-      <main
-        style={{
-          minHeight: "0vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
+      <Link href="/state" style={{ display: "inline-block" }}>
         <Image
           src="/outflo.jpg"
           alt="Outflō"
@@ -27,9 +21,8 @@ export default function Home() {
           height={320}
           priority
         />
-      </main>
-    </Link>
+      </Link>
+    </main>
   );
 }
-
 
