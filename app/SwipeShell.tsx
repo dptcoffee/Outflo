@@ -3,9 +3,9 @@
 import { ReactNode, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSwipe } from "./hooks/useSwipe";
+import { useSwipe } from "./hooks/useSwipe"; "/state/time"
 
-const ROUTES = ["/", "/state", "/state/merchant"];
+const ROUTES = ["/", "/state", "/state/merchant", "/state/time"];
 
 function idxOf(pathname: string) {
   const i = ROUTES.indexOf(pathname);
@@ -64,6 +64,7 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
           }}
         >
           <Pill href="/" active={pathname === "/"} label="Home" />
+          <Pill href="/state/time" active={pathname === "/state/time"} label="Time" />
           <Pill href="/state" active={pathname === "/state"} label="Gain" />
           <Pill href="/state/merchant" active={pathname === "/state/merchant"} label="365" />
         </div>
