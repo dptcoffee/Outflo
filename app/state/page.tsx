@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { useSwipe } from "../hooks/useSwipe";
 
 export default function State() {
+  const router = useRouter();
+  const swipe = useSwipe(
+    () => router.push("/state/merchant"), // swipe left
+    () => router.push("/")                // swipe right
+  );
+  
   const [budget, setBudget] = useState<string>("20");
   const [spent, setSpent] = useState<string>("13");
 
@@ -28,6 +34,7 @@ export default function State() {
         display: "grid",
         placeItems: "center",
         padding: "max(24px, 6vh) 24px",
+        touchAction: "pany",
       }}
     >
       <section
