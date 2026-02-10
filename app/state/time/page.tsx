@@ -2,42 +2,47 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-function pad(n: number) {
-  return n.toString().padStart(2, "0");
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function isLeapYear(y: number) {
+  return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+}
+
+function dayOfYearLocal(d: Date) {
+  const start = new Date(d.getFullYear(), 0, 1, 0, 0, 0, 0);
+  const ms = d.getTime() - start.getTime();
+  return Math.floor(ms / 86400000) + 1; // 1-based
+}
+
+function timeOfDay(d: Date) {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
 
 export default function TimePage() {
-  // tick once per second
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date>(() => new Date());
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  const { dayOfYear, hmsElapsed, percentYear } = useMemo(() => {
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    const msElapsed = now.getTime() - startOfYear.getTime();
+  const out = useMemo(() => {
+    const day = dayOfYearLocal(now);
+    const daysInYear = isLeapYear(now.getFullYear()) ? 366 : 365;
 
-    const secondsElapsed = Math.floor(msElapsed / 1000);
-
-    const hours = Math.floor(secondsElapsed / 3600);
-    const minutes = Math.floor((secondsElapsed % 3600) / 60);
-    const seconds = secondsElapsed % 60;
-
-    const dayOfYear =
-      Math.floor(msElapsed / (1000 * 60 * 60 * 24)) + 1;
-
-    const isLeap =
-      new Date(now.getFullYear(), 1, 29).getMonth() === 1;
-    const daysInYear = isLeap ? 366 : 365;
-
-    const percentYear = (dayOfYear / daysInYear) * 100;
+    // % of year complete by fraction of the current day (smooth, seconds-based)
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const secondsIntoToday = Math.floor((now.getTime() - startOfToday.getTime()) / 1000);
+    const fracOfToday = secondsIntoToday / 86400; // 0..~1
+    const percent = (((day - 1) + fracOfToday) / daysInYear) * 100;
 
     return {
-      dayOfYear,
-      hmsElapsed: `${hours.toLocaleString()}:${pad(minutes)}:${pad(seconds)}`,
-      percentYear: percentYear.toFixed(2),
+      day,
+      daysInYear,
+      tod: timeOfDay(now),
+      percent: percent.toFixed(2),
     };
   }, [now]);
 
@@ -57,31 +62,32 @@ export default function TimePage() {
         style={{
           width: "min(640px, 92vw)",
           display: "grid",
-          rowGap: "clamp(28px, 5vh, 56px)",
+          rowGap: "clamp(24px, 4.5vh, 52px)",
         }}
       >
         {/* Row 1 — Position */}
         <div style={{ fontSize: 13, opacity: 0.55 }}>
-          Day {dayOfYear} of 365
+          Day {out.day} of {out.daysInYear}
         </div>
 
-        {/* Row 2 — Flow */}
+        {/* Row 2 — Flow (main) */}
         <div
           style={{
-            fontSize: "clamp(44px, 7vw, 72px)",
+            fontSize: "clamp(56px, 8vw, 86px)",
             fontWeight: 700,
             fontVariantNumeric: "tabular-nums",
-            textShadow: "0 0 18px rgba(255,255,255,0.35)",
+            textShadow: "0 0 18px rgba(255,255,255,0.35)", // same glow language
           }}
         >
-          {hmsElapsed}
+          {out.tod}
         </div>
 
         {/* Row 3 — Meaning */}
         <div style={{ fontSize: 15, opacity: 0.7 }}>
-          {percentYear}% of year complete
+          {out.percent}% of year complete
         </div>
       </section>
     </main>
   );
 }
+
