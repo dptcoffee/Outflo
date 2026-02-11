@@ -3,9 +3,9 @@
 import { ReactNode, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSwipe } from "./hooks/useSwipe"; "/state/time"
+import { useSwipe } from "@/hooks/useSwipe";
 
-const ROUTES = ["/", "/state", "/state/merchant", "/state/time"];
+const ROUTES = ["/", "/365", "/calculate", "/time"];
 
 function idxOf(pathname: string) {
   const i = ROUTES.indexOf(pathname);
@@ -18,28 +18,24 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
 
   const { left, right } = useMemo(() => {
     const i = idxOf(pathname);
-    const left = ROUTES[Math.min(i + 1, ROUTES.length - 1)];  // swipe left -> next
-    const right = ROUTES[Math.max(i - 1, 0)];                  // swipe right -> prev
+    const left = ROUTES[Math.min(i + 1, ROUTES.length - 1)];
+    const right = ROUTES[Math.max(i - 1, 0)];
     return { left, right };
   }, [pathname]);
 
-  const swipe = useSwipe(
-    () => router.push(left),
-    () => router.push(right)
-  );
+  const swipe = useSwipe(() => router.push(left), () => router.push(right));
 
   return (
     <div
       {...swipe}
       style={{
         minHeight: "100vh",
-        touchAction: "pan-y",   // allow vertical scroll, still detect horizontal swipe
+        touchAction: "pan-y",
         position: "relative",
       }}
     >
       {children}
 
-      {/* Bottom thumb nav */}
       <nav
         style={{
           position: "fixed",
@@ -64,9 +60,9 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
           }}
         >
           <Pill href="/" active={pathname === "/"} label="Home" />
-          <Pill href="/state/time" active={pathname === "/state/time"} label="Time" />
-          <Pill href="/state" active={pathname === "/state"} label="Gain" />
-          <Pill href="/state/merchant" active={pathname === "/state/merchant"} label="365" />
+          <Pill href="/365" active={pathname === "/365"} label="365" />
+          <Pill href="/calculate" active={pathname === "/calculate"} label="Calculate" />
+          <Pill href="/time" active={pathname === "/time"} label="Time" />
         </div>
       </nav>
     </div>
@@ -91,3 +87,4 @@ function Pill({ href, label, active }: { href: string; label: string; active: bo
     </Link>
   );
 }
+

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import SwipeShell from "./SwipeShell"; // 👈 add this
+import SwipeShell from "@/components/SwipeShell"; // 👈 add this
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
