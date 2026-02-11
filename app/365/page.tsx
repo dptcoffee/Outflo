@@ -6,8 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 type Receipt = {
   id: string;
   place: string;
-  amount: number; // positive outflow
-  ts: number;     // epoch ms (stamped by engine)
+  amount: number;
+  ts: number; // epoch ms
 };
 
 const STORAGE_KEY = "outflo_receipts_v1";
@@ -33,7 +33,7 @@ export default function Engine365() {
   const [place, setPlace] = useState("");
   const [amount, setAmount] = useState("");
 
-  // load once
+  // Load from storage
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -44,7 +44,7 @@ export default function Engine365() {
     } catch {}
   }, []);
 
-  // save on change
+  // Save to storage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(receipts));
@@ -105,7 +105,7 @@ export default function Engine365() {
           rowGap: "clamp(28px, 5vh, 56px)",
         }}
       >
-        {/* BIG number */}
+        {/* Today Spend */}
         <div style={{ display: "grid", rowGap: 10 }}>
           <div style={{ fontSize: 13, opacity: 0.55 }}>Today Spend</div>
           <div
@@ -119,7 +119,7 @@ export default function Engine365() {
           </div>
         </div>
 
-        {/* SMALL number */}
+        {/* 365 Spend */}
         <div style={{ display: "grid", rowGap: 10 }}>
           <div style={{ fontSize: 13, opacity: 0.55 }}>365 Spend</div>
           <div
@@ -134,7 +134,7 @@ export default function Engine365() {
         </div>
 
         {/* Inputs */}
-        <div style={{ display: "grid", rowGap: 14, marginTop: 6 }}>
+        <div style={{ display: "grid", rowGap: 14 }}>
           <input
             placeholder="Place"
             value={place}
@@ -154,18 +154,24 @@ export default function Engine365() {
             Add
           </button>
 
-          {/* Receipts (bottom). Number is the link. */}
-          <div style={{ fontSize: 12, opacity: 0.55, textAlign: "right" }}>
+          {/* Receipts Count (Left Aligned, Bold Number) */}
+          <div style={{ fontSize: 13, opacity: 0.85 }}>
             <Link
               href="/365/receipts"
               style={{
-                color: "white",
-                opacity: 0.9,
                 textDecoration: "none",
-                fontVariantNumeric: "tabular-nums",
+                color: "white",
               }}
             >
-              {receipts.length}
+              Receipts:{" "}
+              <span
+                style={{
+                  fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {receipts.length}
+              </span>
             </Link>
           </div>
         </div>
@@ -195,5 +201,6 @@ const buttonStyle: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 600,
 };
+
 
 
