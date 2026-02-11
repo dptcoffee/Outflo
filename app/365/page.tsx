@@ -41,25 +41,21 @@ export default function Engine365() {
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return;
       setReceipts(parsed);
-    } catch {
-      // ignore corrupt storage for v1
-    }
+    } catch {}
   }, []);
 
   // save on change
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(receipts));
-    } catch {
-      // ignore quota issues for v1
-    }
+    } catch {}
   }, [receipts]);
 
   const nowTs = Date.now();
 
   const { todaySpend, spend365 } = useMemo(() => {
     const today0 = startOfTodayLocal(nowTs);
-    const cutoff365 = nowTs - 365 * 24 * 60 * 60 * 1000; // 31,536,000 seconds in ms
+    const cutoff365 = nowTs - 365 * 24 * 60 * 60 * 1000;
 
     const today = receipts.filter((r) => r.ts >= today0 && r.ts <= nowTs);
     const rolling = receipts.filter((r) => r.ts >= cutoff365 && r.ts <= nowTs);
@@ -137,19 +133,6 @@ export default function Engine365() {
           </div>
         </div>
 
-        {/* Receipts count + link */}
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-          <div style={{ fontSize: 12, opacity: 0.55 }}>
-            Receipts:{" "}
-            <span style={{ opacity: 0.9, fontVariantNumeric: "tabular-nums" }}>
-              {receipts.length}
-            </span>
-          </div>
-          <Link href="/365/receipts" style={{ fontSize: 12, color: "white", opacity: 0.7, textDecoration: "none" }}>
-            View receipts
-          </Link>
-        </div>
-
         {/* Inputs */}
         <div style={{ display: "grid", rowGap: 14, marginTop: 6 }}>
           <input
@@ -170,6 +153,21 @@ export default function Engine365() {
           <button onClick={addReceipt} style={buttonStyle}>
             Add
           </button>
+
+          {/* Receipts (bottom). Number is the link. */}
+          <div style={{ fontSize: 12, opacity: 0.55, textAlign: "right" }}>
+            <Link
+              href="/365/receipts"
+              style={{
+                color: "white",
+                opacity: 0.9,
+                textDecoration: "none",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {receipts.length}
+            </Link>
+          </div>
         </div>
       </section>
     </main>
