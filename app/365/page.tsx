@@ -5,8 +5,8 @@ import { useMemo, useState } from "react";
 type Receipt = {
   id: string;
   place: string;
-  amount: number;
-  ts: number; // epoch ms
+  amount: number; // positive outflow
+  ts: number;     // epoch ms (stamped by engine)
 };
 
 function startOfTodayLocal(nowTs: number) {
@@ -26,17 +26,16 @@ export default function Engine365() {
 
   // inputs (empty by default)
   const [place, setPlace] = useState("");
-  const [ts, setTs] = useState("");       // epoch ms string
-  const [amount, setAmount] = useState(""); // money string
+  const [amount, setAmount] = useState("");
 
   const nowTs = Date.now();
 
   const { todaySpend, spend365 } = useMemo(() => {
     const today0 = startOfTodayLocal(nowTs);
-    const cutoff365 = nowTs - 365 * 24 * 60 * 60 * 1000;
+    const cutoff365 = nowTs - 365 * 24 * 60 * 60 * 1000; // 31,536,000 seconds in ms
 
-    const today = receipts.filter(r => r.ts >= today0 && r.ts <= nowTs);
-    const rolling = receipts.filter(r => r.ts >= cutoff365 && r.ts <= nowTs);
+    const today = receipts.filter((r) => r.ts >= today0 && r.ts <= nowTs);
+    const rolling = receipts.filter((r) => r.ts >= cutoff365 && r.ts <= nowTs);
 
     return {
       todaySpend: sumAmounts(today),
@@ -46,13 +45,12 @@ export default function Engine365() {
 
   function addReceipt() {
     const p = place.trim();
-    const t = Number(ts);
     const a = Number(amount);
 
-    // minimal validation
     if (!p) return;
-    if (!Number.isFinite(t) || t <= 0) return;
     if (!Number.isFinite(a) || a <= 0) return;
+
+    const t = Date.now();
 
     const r: Receipt = {
       id: `${t}-${Math.random().toString(16).slice(2)}`,
@@ -61,11 +59,10 @@ export default function Engine365() {
       ts: t,
     };
 
-    setReceipts(prev => [r, ...prev]);
+    setReceipts((prev) => [r, ...prev]);
 
-    // reset inputs (keep it fast for batching)
+    // reset inputs for fast re-entry
     setPlace("");
-    setTs("");
     setAmount("");
   }
 
@@ -115,20 +112,12 @@ export default function Engine365() {
           </div>
         </div>
 
-        {/* Inputs */}
+        {/* Inputs (bottom) */}
         <div style={{ display: "grid", rowGap: 14, marginTop: 6 }}>
           <input
             placeholder="Place"
             value={place}
             onChange={(e) => setPlace(e.target.value)}
-            style={inputStyle}
-          />
-
-          <input
-            placeholder="Timestamp (epoch ms)"
-            inputMode="numeric"
-            value={ts}
-            onChange={(e) => setTs(e.target.value)}
             style={inputStyle}
           />
 
@@ -144,7 +133,7 @@ export default function Engine365() {
             Add
           </button>
 
-          {/* optional: tiny debug count */}
+          {/* tiny debug (optional) */}
           <div style={{ fontSize: 12, opacity: 0.45 }}>
             Receipts: {receipts.length}
           </div>
@@ -175,3 +164,4 @@ const buttonStyle: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 600,
 };
+
