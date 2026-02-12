@@ -40,8 +40,8 @@ export default function Home() {
       <div
         style={{
           position: "fixed",
+          top: "calc(env(safe-area-inset-top) + 16px)",
           left: 18,
-          bottom: 18,
           fontSize: 14,
           fontVariantNumeric: "tabular-nums",
           letterSpacing: "0.06em",
@@ -49,10 +49,11 @@ export default function Home() {
           color: "white",
           textShadow: "0 0 10px rgba(255,255,255,0.45)",
           userSelect: "none",
-        }}
-      >
-        {now}
-      </div>
+          zIndex: 10,
+  }}
+>
+  {now}
+</div>
     </main>
   );
 }
