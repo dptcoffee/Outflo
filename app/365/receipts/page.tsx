@@ -37,23 +37,31 @@ function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-/* 24-hour European formatted receipt time */
+/* 24-hour European time (time only, day is shown as header) */
 function formatReceiptTime(ts: number) {
   const d = new Date(ts);
-
-  const date = d.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-
-  const time = d.toLocaleTimeString("en-GB", {
+  return d.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
+}
 
-  return `${date} · ${time}`;
+function formatDayHeader(ts: number) {
+  const d = new Date(ts);
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function dayKeyLocal(ts: number) {
+  const d = new Date(ts);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function receiptSuffix(id: string) {
@@ -84,9 +92,26 @@ export default function ReceiptsPage() {
     }
   }, []);
 
-  const sortedReceipts = useMemo(() => {
-    return [...receipts].sort((a, b) => b.ts - a.ts);
+  const sortedLimited = useMemo(() => {
+    const sorted = [...receipts].sort((a, b) => b.ts - a.ts);
+    return sorted.slice(0, 300);
   }, [receipts]);
+
+  const grouped = useMemo(() => {
+    const order: string[] = [];
+    const map = new Map<string, Receipt[]>();
+
+    for (const r of sortedLimited) {
+      const key = dayKeyLocal(r.ts);
+      if (!map.has(key)) {
+        map.set(key, []);
+        order.push(key);
+      }
+      map.get(key)!.push(r);
+    }
+
+    return { order, map };
+  }, [sortedLimited]);
 
   function unlockAdmin() {
     const next = tapCount + 1;
@@ -101,7 +126,7 @@ export default function ReceiptsPage() {
     const payload = {
       exportedAt: Date.now(),
       version: 1,
-      receipts: sortedReceipts,
+      receipts: [...receipts].sort((a, b) => b.ts - a.ts), // full vault
     };
 
     // 1) Save last export for instant viewing
@@ -206,64 +231,115 @@ export default function ReceiptsPage() {
           <div style={{ fontSize: 12, opacity: 0.45 }}>
             Total:{" "}
             <span style={{ fontVariantNumeric: "tabular-nums" }}>
-              {sortedReceipts.length}
+              {receipts.length}
+            </span>
+            <span style={{ opacity: 0.35 }}>
+              {" "}
+              · showing latest {sortedLimited.length}
             </span>
           </div>
         </div>
 
-        {/* Receipt cards */}
-        {sortedReceipts.length === 0 ? (
+        {/* Grouped by day + totals */}
+        {sortedLimited.length === 0 ? (
           <div style={{ fontSize: 12, opacity: 0.35 }}>No receipts yet.</div>
         ) : (
-          <div style={{ display: "grid", gap: 12 }}>
-            {sortedReceipts.slice(0, 300).map((r) => (
-              <div
-                key={r.id}
-                style={{
-                  padding: "16px",
-                  borderRadius: 18,
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  background: "rgba(255,255,255,0.03)",
-                  display: "grid",
-                  gap: 10,
-                }}
-              >
-                <div style={{ fontSize: 14, opacity: 0.9 }}>{r.place}</div>
+          <div style={{ display: "grid", gap: 18 }}>
+            {grouped.order.map((key) => {
+              const items = grouped.map.get(key)!;
+              const header = formatDayHeader(items[0].ts);
+              const dayTotal = items.reduce((sum, r) => sum + r.amount, 0);
 
-                <div
-                  style={{
-                    fontSize: 30,
-                    fontWeight: 700,
-                    fontVariantNumeric: "tabular-nums",
-                    letterSpacing: "-0.02em",
-                  }}
-                >
-                  {formatMoney(r.amount)}
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "baseline",
-                    fontSize: 12,
-                    opacity: 0.55,
-                  }}
-                >
-                  <span>{formatReceiptTime(r.ts)}</span>
-
-                  <span
+              return (
+                <div key={key} style={{ display: "grid", gap: 10 }}>
+                  {/* Day header row */}
+                  <div
                     style={{
-                      fontVariantNumeric: "tabular-nums",
-                      letterSpacing: "0.05em",
-                      opacity: 0.7,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "baseline",
+                      gap: 12,
                     }}
                   >
-                    #{receiptSuffix(r.id)}
-                  </span>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        opacity: 0.6,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {header}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: 12,
+                        opacity: 0.75,
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {formatMoney(dayTotal)}
+                    </div>
+                  </div>
+
+                  {/* Day receipts */}
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {items.map((r) => (
+                      <div
+                        key={r.id}
+                        style={{
+                          padding: "16px",
+                          borderRadius: 18,
+                          border: "1px solid rgba(255,255,255,0.10)",
+                          background: "rgba(255,255,255,0.03)",
+                          display: "grid",
+                          gap: 10,
+                        }}
+                      >
+                        <div style={{ fontSize: 14, opacity: 0.9 }}>
+                          {r.place}
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 30,
+                            fontWeight: 700,
+                            fontVariantNumeric: "tabular-nums",
+                            letterSpacing: "-0.02em",
+                          }}
+                        >
+                          {formatMoney(r.amount)}
+                        </div>
+
+                        {/* bottom row: time left, receipt # right */}
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "baseline",
+                            fontSize: 12,
+                            opacity: 0.55,
+                          }}
+                        >
+                          <span>{formatReceiptTime(r.ts)}</span>
+
+                          <span
+                            style={{
+                              fontVariantNumeric: "tabular-nums",
+                              letterSpacing: "0.05em",
+                              opacity: 0.7,
+                            }}
+                          >
+                            #{receiptSuffix(r.id)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -294,6 +370,8 @@ const dangerButtonStyle: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
+
+
 
 
 
