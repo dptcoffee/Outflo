@@ -7,29 +7,35 @@ export default function ThreeSixFiveMenu() {
         minHeight: "100vh",
         backgroundColor: "black",
         color: "white",
+        padding: "max(24px, 6vh) 24px",
         display: "grid",
         placeItems: "center",
-        padding: "max(24px, 6vh) 24px",
       }}
     >
-      <section
-        style={{
-          width: "min(520px, 92vw)",
-          display: "grid",
-          gap: 14,
-        }}
-      >
-        <div style={{ fontSize: 13, opacity: 0.55 }}>365</div>
+      <section style={{ width: "min(760px, 94vw)" }}>
+        <div style={{ fontSize: 13, opacity: 0.55, marginBottom: 14 }}>365</div>
 
-        <MenuLink href="/365/money" label="Money" />
-        <MenuLink href="/time" label="Time" />
-        <MenuLink href="/calculate" label="Calculate" />
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 14,
+          }}
+        >
+          <Tile href="/365/money" label="Money" />
+          <Tile href="/time" label="Time" />
+
+          {/* 3rd tile spans full width for symmetry */}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <Tile href="/calculate" label="Calculate" />
+          </div>
+        </div>
       </section>
     </main>
   );
 }
 
-function MenuLink({ href, label }: { href: string; label: string }) {
+function Tile({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
@@ -38,19 +44,19 @@ function MenuLink({ href, label }: { href: string; label: string }) {
         color: "white",
         border: "1px solid rgba(255,255,255,0.12)",
         background: "rgba(255,255,255,0.04)",
-        borderRadius: 16,
-        padding: "18px 16px",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        fontSize: 16,
+        borderRadius: 22,
+        padding: "22px 20px",
+        height: 140,
+        display: "grid",
+        alignContent: "space-between",
       }}
     >
-      <span>{label}</span>
-      <span style={{ opacity: 0.35 }}>→</span>
+      <div style={{ fontSize: 20, fontWeight: 650 }}>{label}</div>
+      <div style={{ fontSize: 13, opacity: 0.55 }}>Open</div>
     </Link>
   );
 }
+
 
 
 

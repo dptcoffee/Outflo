@@ -2,50 +2,57 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const EPOCH_KEY = "outflo_epoch_startedAt_ms";
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+const EPOCH_KEY = "outflo_system_epoch_v1"; // keep stable
+
+function getOrCreateEpoch(): number {
+  try {
+    const raw = localStorage.getItem(EPOCH_KEY);
+    const n = raw ? Number(raw) : NaN;
+    if (Number.isFinite(n) && n > 0) return n;
+
+    const now = Date.now();
+    localStorage.setItem(EPOCH_KEY, String(now));
+    return now;
+  } catch {
+    return Date.now();
+  }
+}
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-function formatHMS(totalSeconds: number) {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = Math.floor(totalSeconds % 60);
-  return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
-}
-
-function getOrCreateEpoch(): number {
-  if (typeof window === "undefined") return Date.now();
-
-  const existing = window.localStorage.getItem(EPOCH_KEY);
-  if (existing) return Number(existing);
-
-  const now = Date.now();
-  window.localStorage.setItem(EPOCH_KEY, String(now));
-  return now;
-}
-
 export default function TimePage() {
-  const [tick, setTick] = useState(0);
-
-  // Epoch is written once. Never overwritten.
-  const startedAt = useMemo(() => getOrCreateEpoch(), []);
+  const [now, setNow] = useState(() => Date.now());
+  const [epoch, setEpoch] = useState<number | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
+    setEpoch(getOrCreateEpoch());
+
+    // Update often so the % “moves” smoothly
+    const id = window.setInterval(() => setNow(Date.now()), 200);
+    return () => window.clearInterval(id);
   }, []);
 
-  const now = Date.now();
-  const ageSeconds = Math.floor((now - startedAt) / 1000);
+  const { hhmmss, pct } = useMemo(() => {
+    if (epoch == null) return { hhmmss: "00:00:00", pct: 0 };
 
-  // Percent of rolling 365 since activation
-  const percent = Math.min(
-    100,
-    ((now - startedAt) / YEAR_MS) * 100
-  ).toFixed(2);
+    const elapsed = now - epoch;
+    const cycleMs = ((elapsed % YEAR_MS) + YEAR_MS) % YEAR_MS;
+
+    const totalSeconds = Math.floor(cycleMs / 1000);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+
+    const pct = (cycleMs / YEAR_MS) * 100;
+
+    return {
+      hhmmss: `${pad2(h)}:${pad2(m)}:${pad2(s)}`,
+      pct,
+    };
+  }, [now, epoch]);
 
   return (
     <main
@@ -56,40 +63,29 @@ export default function TimePage() {
         display: "grid",
         placeItems: "center",
         padding: "max(24px, 6vh) 24px",
-        touchAction: "pan-y",
       }}
     >
-      <section
-        style={{
-          width: "min(640px, 92vw)",
-          display: "grid",
-          rowGap: "clamp(24px, 4.5vh, 52px)",
-        }}
-      >
-        {/* Row 1 — Position */}
-        <div style={{ fontSize: 13, opacity: 0.55 }}>
-          System Running
-        </div>
+      <section style={{ width: "min(640px, 92vw)", display: "grid", rowGap: 28 }}>
+        <div style={{ fontSize: 13, opacity: 0.55 }}>System Running</div>
 
-        {/* Row 2 — Flow (main) */}
         <div
           style={{
-            fontSize: "clamp(56px, 8vw, 86px)",
+            fontSize: "clamp(64px, 10vw, 92px)",
             fontWeight: 700,
             fontVariantNumeric: "tabular-nums",
-            textShadow: "0 0 18px rgba(255,255,255,0.35)",
+            letterSpacing: "-0.02em",
           }}
         >
-          {formatHMS(ageSeconds)}
+          {hhmmss}
         </div>
 
-        {/* Row 3 — Meaning */}
-        <div style={{ fontSize: 15, opacity: 0.7 }}>
-          {percent}% of 365-day cycle
+        <div style={{ fontSize: 16, opacity: 0.55 }}>
+          {pct.toFixed(6)}% of 365-day cycle
         </div>
       </section>
     </main>
   );
 }
+
 
 
