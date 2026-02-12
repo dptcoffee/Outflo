@@ -37,6 +37,7 @@ function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
+/* 24-hour European formatted receipt time */
 function formatReceiptTime(ts: number) {
   const d = new Date(ts);
 
@@ -53,6 +54,11 @@ function formatReceiptTime(ts: number) {
   });
 
   return `${date} · ${time}`;
+}
+
+function receiptSuffix(id: string) {
+  const parts = id.split("-");
+  return parts.length > 1 ? parts[1] : id;
 }
 
 export default function ReceiptsPage() {
@@ -98,12 +104,12 @@ export default function ReceiptsPage() {
       receipts: sortedReceipts,
     };
 
-    // 1) save last export for instant viewing (no upload step)
+    // 1) Save last export for instant viewing
     try {
       localStorage.setItem(LAST_EXPORT_KEY, JSON.stringify(payload));
     } catch {}
 
-    // 2) also download the file as a real backup
+    // 2) Download real backup file
     try {
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: "application/json",
@@ -118,7 +124,7 @@ export default function ReceiptsPage() {
       URL.revokeObjectURL(url);
     } catch {}
 
-    // 3) auto-open viewer
+    // 3) Auto-open viewer
     router.push("/365/export");
   }
 
@@ -235,8 +241,26 @@ export default function ReceiptsPage() {
                   {formatMoney(r.amount)}
                 </div>
 
-                <div style={{ fontSize: 12, opacity: 0.55 }}>
-                  {formatReceiptTime(r.ts)}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    fontSize: 12,
+                    opacity: 0.55,
+                  }}
+                >
+                  <span>{formatReceiptTime(r.ts)}</span>
+
+                  <span
+                    style={{
+                      fontVariantNumeric: "tabular-nums",
+                      letterSpacing: "0.05em",
+                      opacity: 0.7,
+                    }}
+                  >
+                    #{receiptSuffix(r.id)}
+                  </span>
                 </div>
               </div>
             ))}
