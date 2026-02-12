@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Receipt = {
   id: string;
@@ -12,6 +13,7 @@ type Receipt = {
 
 const STORAGE_KEY = "outflo_receipts_v1";
 const BACKUP_KEY = "outflo_receipts_v1_backup";
+const LAST_EXPORT_KEY = "outflo_last_export_v1";
 
 function safeParseReceipts(raw: string | null): Receipt[] | null {
   if (!raw) return null;
@@ -35,7 +37,6 @@ function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-/* 24-hour European formatted receipt time */
 function formatReceiptTime(ts: number) {
   const d = new Date(ts);
 
@@ -55,6 +56,8 @@ function formatReceiptTime(ts: number) {
 }
 
 export default function ReceiptsPage() {
+  const router = useRouter();
+
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [admin, setAdmin] = useState(false);
   const [tapCount, setTapCount] = useState(0);
@@ -89,12 +92,19 @@ export default function ReceiptsPage() {
   }
 
   function exportJson() {
+    const payload = {
+      exportedAt: Date.now(),
+      version: 1,
+      receipts: sortedReceipts,
+    };
+
+    // 1) save last export for instant viewing (no upload step)
     try {
-      const payload = {
-        exportedAt: Date.now(),
-        version: 1,
-        receipts: sortedReceipts,
-      };
+      localStorage.setItem(LAST_EXPORT_KEY, JSON.stringify(payload));
+    } catch {}
+
+    // 2) also download the file as a real backup
+    try {
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: "application/json",
       });
@@ -107,6 +117,9 @@ export default function ReceiptsPage() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch {}
+
+    // 3) auto-open viewer
+    router.push("/365/export");
   }
 
   function resetVault() {
@@ -140,6 +153,7 @@ export default function ReceiptsPage() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "baseline",
+            gap: 12,
           }}
         >
           <Link
@@ -193,9 +207,7 @@ export default function ReceiptsPage() {
 
         {/* Receipt cards */}
         {sortedReceipts.length === 0 ? (
-          <div style={{ fontSize: 12, opacity: 0.35 }}>
-            No receipts yet.
-          </div>
+          <div style={{ fontSize: 12, opacity: 0.35 }}>No receipts yet.</div>
         ) : (
           <div style={{ display: "grid", gap: 12 }}>
             {sortedReceipts.slice(0, 300).map((r) => (
@@ -210,9 +222,7 @@ export default function ReceiptsPage() {
                   gap: 10,
                 }}
               >
-                <div style={{ fontSize: 14, opacity: 0.9 }}>
-                  {r.place}
-                </div>
+                <div style={{ fontSize: 14, opacity: 0.9 }}>{r.place}</div>
 
                 <div
                   style={{
@@ -260,6 +270,7 @@ const dangerButtonStyle: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
+
 
 
 

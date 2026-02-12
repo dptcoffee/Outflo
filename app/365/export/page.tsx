@@ -18,6 +18,7 @@ type ExportPayloadV1 = {
 
 const STORAGE_KEY = "outflo_receipts_v1";
 const BACKUP_KEY = "outflo_receipts_v1_backup";
+const LAST_EXPORT_KEY = "outflo_last_export_v1";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -100,6 +101,17 @@ export default function ExportViewerPage() {
   const [admin, setAdmin] = useState(false);
   const [tapCount, setTapCount] = useState(0);
 
+  // auto-load LAST_EXPORT on entry
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LAST_EXPORT_KEY);
+      if (!raw) return;
+      const parsed = safeParseExport(raw);
+      if (!parsed) return;
+      setPayload(parsed);
+    } catch {}
+  }, []);
+
   const sortedReceipts = useMemo(() => {
     if (!payload) return [];
     return [...payload.receipts].sort((a, b) => b.ts - a.ts);
@@ -116,8 +128,6 @@ export default function ExportViewerPage() {
 
   async function onPickFile(file: File | null) {
     setError("");
-    setPayload(null);
-
     if (!file) return;
 
     try {
@@ -211,7 +221,7 @@ export default function ExportViewerPage() {
           )}
         </div>
 
-        {/* file input */}
+        {/* optional file input (still available) */}
         <div style={{ display: "grid", gap: 10 }}>
           <input
             type="file"
@@ -268,7 +278,7 @@ export default function ExportViewerPage() {
           </>
         ) : (
           <div style={{ fontSize: 12, opacity: 0.35 }}>
-            Choose an export file to view receipts.
+            No last export found. Choose an export file to view receipts.
           </div>
         )}
       </section>
