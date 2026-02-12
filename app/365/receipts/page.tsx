@@ -35,15 +35,23 @@ function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
+/* 24-hour European formatted receipt time */
 function formatReceiptTime(ts: number) {
   const d = new Date(ts);
-  return d.toLocaleString(undefined, {
+
+  const date = d.toLocaleDateString("en-GB", {
+    day: "2-digit",
     month: "short",
-    day: "numeric",
     year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
   });
+
+  const time = d.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  return `${date} · ${time}`;
 }
 
 export default function ReceiptsPage() {
@@ -51,7 +59,7 @@ export default function ReceiptsPage() {
   const [admin, setAdmin] = useState(false);
   const [tapCount, setTapCount] = useState(0);
 
-  // Load: primary -> backup fallback
+  // Load primary -> backup fallback
   useEffect(() => {
     const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
     if (primary) {
@@ -125,14 +133,13 @@ export default function ReceiptsPage() {
         padding: "max(24px, 6vh) 24px",
       }}
     >
-      <section style={{ width: "min(760px, 94vw)", display: "grid", gap: 14 }}>
+      <section style={{ width: "min(760px, 94vw)", display: "grid", gap: 16 }}>
         {/* Top row */}
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "baseline",
-            gap: 12,
           }}
         >
           <Link
@@ -184,30 +191,32 @@ export default function ReceiptsPage() {
           </div>
         </div>
 
-        {/* Receipt list */}
+        {/* Receipt cards */}
         {sortedReceipts.length === 0 ? (
-          <div style={{ fontSize: 12, opacity: 0.35 }}>No receipts yet.</div>
+          <div style={{ fontSize: 12, opacity: 0.35 }}>
+            No receipts yet.
+          </div>
         ) : (
-          <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gap: 12 }}>
             {sortedReceipts.slice(0, 300).map((r) => (
               <div
                 key={r.id}
                 style={{
-                  padding: "14px 14px",
-                  borderRadius: 16,
+                  padding: "16px",
+                  borderRadius: 18,
                   border: "1px solid rgba(255,255,255,0.10)",
                   background: "rgba(255,255,255,0.03)",
                   display: "grid",
                   gap: 10,
                 }}
               >
-                {/* Place */}
-                <div style={{ fontSize: 14, opacity: 0.9 }}>{r.place}</div>
+                <div style={{ fontSize: 14, opacity: 0.9 }}>
+                  {r.place}
+                </div>
 
-                {/* Amount */}
                 <div
                   style={{
-                    fontSize: 28,
+                    fontSize: 30,
                     fontWeight: 700,
                     fontVariantNumeric: "tabular-nums",
                     letterSpacing: "-0.02em",
@@ -216,7 +225,6 @@ export default function ReceiptsPage() {
                   {formatMoney(r.amount)}
                 </div>
 
-                {/* Time (human readable) */}
                 <div style={{ fontSize: 12, opacity: 0.55 }}>
                   {formatReceiptTime(r.ts)}
                 </div>
@@ -225,8 +233,7 @@ export default function ReceiptsPage() {
           </div>
         )}
 
-        {/* Footer hint */}
-        <div style={{ fontSize: 11, opacity: 0.22, marginTop: 10 }}>
+        <div style={{ fontSize: 11, opacity: 0.22 }}>
           Stored locally. Export recommended.
         </div>
       </section>
@@ -253,5 +260,6 @@ const dangerButtonStyle: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
+
 
 
