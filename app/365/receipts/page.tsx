@@ -20,6 +20,7 @@ function safeParseReceipts(raw: string | null): Receipt[] | null {
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
+
     const cleaned = parsed.filter((t: any) =>
       t &&
       typeof t.id === "string" &&
@@ -27,6 +28,7 @@ function safeParseReceipts(raw: string | null): Receipt[] | null {
       typeof t.amount === "number" &&
       typeof t.ts === "number"
     );
+
     return cleaned;
   } catch {
     return null;
@@ -37,7 +39,7 @@ function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-/* 24-hour European time (time only, day is shown as header) */
+/* 24-hour European time (time only) */
 function formatReceiptTime(ts: number) {
   const d = new Date(ts);
   return d.toLocaleTimeString("en-GB", {
@@ -47,6 +49,7 @@ function formatReceiptTime(ts: number) {
   });
 }
 
+/* Day header: 11 Feb 2026 */
 function formatDayHeader(ts: number) {
   const d = new Date(ts);
   return d.toLocaleDateString("en-GB", {
@@ -56,6 +59,7 @@ function formatDayHeader(ts: number) {
   });
 }
 
+/* Stable local day key */
 function dayKeyLocal(ts: number) {
   const d = new Date(ts);
   const yyyy = d.getFullYear();
@@ -67,6 +71,32 @@ function dayKeyLocal(ts: number) {
 function receiptSuffix(id: string) {
   const parts = id.split("-");
   return parts.length > 1 ? parts[1] : id;
+}
+
+function hardResetOutfloZeroStart() {
+  // wipe everything we’ve created during this build
+  const KEYS = [
+    // receipts vault
+    "outflo_receipts_v1",
+    "outflo_receipts_v1_backup",
+
+    // system clock epoch (Time page)
+    "outflo_system_epoch_v1",
+
+    // any earlier home/app anchors used in iterations
+    "outflo_app_epoch_start_v1",
+    "outflo_epoch_start_v1",
+    "outflo_app_epoch_v1",
+    "outflo_epoch_start",
+    "outflo_epoch_v1",
+
+    // export cache
+    "outflo_last_export_v1",
+  ];
+
+  try {
+    for (const k of KEYS) localStorage.removeItem(k);
+  } catch {}
 }
 
 export default function ReceiptsPage() {
@@ -83,6 +113,7 @@ export default function ReceiptsPage() {
       setReceipts(primary);
       return;
     }
+
     const backup = safeParseReceipts(localStorage.getItem(BACKUP_KEY));
     if (backup) {
       setReceipts(backup);
@@ -134,7 +165,7 @@ export default function ReceiptsPage() {
       localStorage.setItem(LAST_EXPORT_KEY, JSON.stringify(payload));
     } catch {}
 
-    // 2) Download real backup file
+    // 2) Download file
     try {
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: "application/json",
@@ -166,6 +197,15 @@ export default function ReceiptsPage() {
     setAdmin(false);
   }
 
+  function hardResetZeroStart() {
+    const phrase = window.prompt("Type exactly: ZERO OUTFLO");
+    if (phrase !== "ZERO OUTFLO") return;
+
+    hardResetOutfloZeroStart();
+    // hard start
+    location.href = "/";
+  }
+
   return (
     <main
       style={{
@@ -188,7 +228,7 @@ export default function ReceiptsPage() {
           }}
         >
           <Link
-            href="/365"
+            href="/365/money"
             style={{
               color: "white",
               opacity: 0.7,
@@ -200,12 +240,15 @@ export default function ReceiptsPage() {
           </Link>
 
           {admin ? (
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button onClick={exportJson} style={pillButtonStyle}>
                 Export
               </button>
-              <button onClick={resetVault} style={dangerButtonStyle}>
+              <button onClick={resetVault} style={pillButtonStyle}>
                 Reset Vault
+              </button>
+              <button onClick={hardResetZeroStart} style={dangerButtonStyle}>
+                Hard Reset (Zero Start)
               </button>
             </div>
           ) : (
@@ -240,7 +283,7 @@ export default function ReceiptsPage() {
           </div>
         </div>
 
-        {/* Grouped by day + totals */}
+        {/* Grouped by day */}
         {sortedLimited.length === 0 ? (
           <div style={{ fontSize: 12, opacity: 0.35 }}>No receipts yet.</div>
         ) : (
@@ -248,42 +291,20 @@ export default function ReceiptsPage() {
             {grouped.order.map((key) => {
               const items = grouped.map.get(key)!;
               const header = formatDayHeader(items[0].ts);
-              const dayTotal = items.reduce((sum, r) => sum + r.amount, 0);
 
               return (
                 <div key={key} style={{ display: "grid", gap: 10 }}>
-                  {/* Day header row */}
                   <div
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "baseline",
-                      gap: 12,
+                      fontSize: 12,
+                      opacity: 0.6,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: 12,
-                        opacity: 0.6,
-                        letterSpacing: "0.06em",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {header}
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: 12,
-                        opacity: 0.75,
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      {formatMoney(dayTotal)}
-                    </div>
+                    {header}
                   </div>
 
-                  {/* Day receipts */}
                   <div style={{ display: "grid", gap: 12 }}>
                     {items.map((r) => (
                       <div
@@ -297,9 +318,7 @@ export default function ReceiptsPage() {
                           gap: 10,
                         }}
                       >
-                        <div style={{ fontSize: 14, opacity: 0.9 }}>
-                          {r.place}
-                        </div>
+                        <div style={{ fontSize: 14, opacity: 0.9 }}>{r.place}</div>
 
                         <div
                           style={{
@@ -312,7 +331,6 @@ export default function ReceiptsPage() {
                           {formatMoney(r.amount)}
                         </div>
 
-                        {/* bottom row: time left, receipt # right */}
                         <div
                           style={{
                             display: "flex",
@@ -343,9 +361,7 @@ export default function ReceiptsPage() {
           </div>
         )}
 
-        <div style={{ fontSize: 11, opacity: 0.22 }}>
-          Stored locally. Export recommended.
-        </div>
+        <div style={{ fontSize: 11, opacity: 0.22 }}>Stored locally. Export recommended.</div>
       </section>
     </main>
   );
@@ -362,8 +378,8 @@ const pillButtonStyle: React.CSSProperties = {
 };
 
 const dangerButtonStyle: React.CSSProperties = {
-  background: "rgba(255,60,60,0.12)",
-  border: "1px solid rgba(255,60,60,0.30)",
+  background: "rgba(255,60,60,0.14)",
+  border: "1px solid rgba(255,60,60,0.35)",
   color: "white",
   borderRadius: 999,
   padding: "8px 12px",
