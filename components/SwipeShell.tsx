@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSwipe } from "../hooks/useSwipe";
 
-const ROUTES = ["/", "/365", "/time",];
+const ROUTES = ["/", "/365", "/time"];
 
 function idxOf(pathname: string) {
   const i = ROUTES.indexOf(pathname);
@@ -61,7 +61,7 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
         >
           <Pill href="/" active={pathname === "/"} label="Home" />
           <Pill href="/365" active={pathname === "/365"} label="365" />
-          <Pill href="/state/time" active={pathname === "/state/time"} label="Time" />
+          <Pill href="/time" active={pathname === "/time"} label="Time" />
         </div>
       </nav>
     </div>
