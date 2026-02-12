@@ -7,12 +7,12 @@ import { useSwipe } from "@/hooks/useSwipe";
 export default function State() {
   const router = useRouter();
   const swipe = useSwipe(
-    () => router.push("/merchant"), // swipe left
-    () => router.push("/")                // swipe right
+    () => router.push("/state/merchant"),
+    () => router.push("/")
   );
-  
-  const [budget, setBudget] = useState<string>("20");
-  const [spent, setSpent] = useState<string>("13");
+
+  const [budget, setBudget] = useState<string>("");
+  const [spent, setSpent] = useState<string>("");
 
   const { gain, rolling365 } = useMemo(() => {
     const b = Number(budget) || 0;
@@ -44,7 +44,6 @@ export default function State() {
           rowGap: "clamp(28px, 5vh, 56px)",
         }}
       >
-        {/* Numbers */}
         <div style={{ display: "grid", rowGap: 10 }}>
           <div style={{ fontSize: 13, opacity: 0.55 }}>Today’s Gain</div>
           <div
@@ -71,8 +70,7 @@ export default function State() {
           </div>
         </div>
 
-        {/* Inputs */}
-        <div style={{ display: "grid", rowGap: 12, marginTop: 10 }}>
+        <div style={{ display: "grid", rowGap: 12 }}>
           <input
             type="number"
             step="0.01"
@@ -80,16 +78,9 @@ export default function State() {
             placeholder="Daily Budget"
             value={budget}
             onChange={(e) => setBudget(e.target.value)}
-            style={{
-              padding: 14,
-              borderRadius: 10,
-              border: "1px solid rgba(255,255,255,0.14)",
-              background: "rgba(255,255,255,0.06)",
-              color: "white",
-              outline: "none",
-              fontSize: 16,
-            }}
+            style={inputStyle}
           />
+
           <input
             type="number"
             step="0.01"
@@ -97,18 +88,21 @@ export default function State() {
             placeholder="Amount Spent Today"
             value={spent}
             onChange={(e) => setSpent(e.target.value)}
-            style={{
-              padding: 14,
-              borderRadius: 10,
-              border: "1px solid rgba(255,255,255,0.14)",
-              background: "rgba(255,255,255,0.06)",
-              color: "white",
-              outline: "none",
-              fontSize: 16,
-            }}
+            style={inputStyle}
           />
         </div>
       </section>
     </main>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  padding: 14,
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.06)",
+  color: "white",
+  outline: "none",
+  fontSize: 16,
+};
+
