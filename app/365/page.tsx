@@ -11,6 +11,7 @@ type Receipt = {
 };
 
 const STORAGE_KEY = "outflo_receipts_v1";
+const BACKUP_KEY = "outflo_receipts_v1_backup";
 
 function startOfTodayLocal(nowTs: number) {
   const d = new Date(nowTs);
@@ -28,26 +29,53 @@ function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
+function safeParseReceipts(raw: string | null): Receipt[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    // minimal shape check
+    const cleaned = parsed.filter((t: any) =>
+      t &&
+      typeof t.id === "string" &&
+      typeof t.place === "string" &&
+      typeof t.amount === "number" &&
+      typeof t.ts === "number"
+    );
+    return cleaned;
+  } catch {
+    return null;
+  }
+}
+
 export default function Engine365() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [place, setPlace] = useState("");
   const [amount, setAmount] = useState("");
 
-  // Load from storage
+  // Load: primary -> backup fallback
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return;
-      setReceipts(parsed);
-    } catch {}
+    const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
+    if (primary) {
+      setReceipts(primary);
+      return;
+    }
+    const backup = safeParseReceipts(localStorage.getItem(BACKUP_KEY));
+    if (backup) {
+      setReceipts(backup);
+      // restore primary if it was broken/missing
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(backup));
+      } catch {}
+    }
   }, []);
 
-  // Save to storage
+  // Save: primary + backup (vault hardening)
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(receipts));
+      const s = JSON.stringify(receipts);
+      localStorage.setItem(STORAGE_KEY, s);
+      localStorage.setItem(BACKUP_KEY, s);
     } catch {}
   }, [receipts]);
 
@@ -82,7 +110,9 @@ export default function Engine365() {
       ts: t,
     };
 
+    // append-only vault behavior
     setReceipts((prev) => [r, ...prev]);
+
     setPlace("");
     setAmount("");
   }
@@ -201,6 +231,7 @@ const buttonStyle: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 600,
 };
+
 
 
 
