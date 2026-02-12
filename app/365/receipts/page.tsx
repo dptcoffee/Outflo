@@ -21,12 +21,13 @@ function safeParseReceipts(raw: string | null): Receipt[] | null {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
 
-    const cleaned = parsed.filter((t: any) =>
-      t &&
-      typeof t.id === "string" &&
-      typeof t.place === "string" &&
-      typeof t.amount === "number" &&
-      typeof t.ts === "number"
+    const cleaned = parsed.filter(
+      (t: any) =>
+        t &&
+        typeof t.id === "string" &&
+        typeof t.place === "string" &&
+        typeof t.amount === "number" &&
+        typeof t.ts === "number"
     );
 
     return cleaned;
@@ -71,6 +72,12 @@ function dayKeyLocal(ts: number) {
 function receiptSuffix(id: string) {
   const parts = id.split("-");
   return parts.length > 1 ? parts[1] : id;
+}
+
+function sumDay(items: Receipt[]) {
+  let s = 0;
+  for (const r of items) s += r.amount;
+  return s;
 }
 
 function hardResetOutfloZeroStart() {
@@ -291,6 +298,7 @@ export default function ReceiptsPage() {
             {grouped.order.map((key) => {
               const items = grouped.map.get(key)!;
               const header = formatDayHeader(items[0].ts);
+              const dayTotal = sumDay(items);
 
               return (
                 <div key={key} style={{ display: "grid", gap: 10 }}>
@@ -302,7 +310,7 @@ export default function ReceiptsPage() {
                       textTransform: "uppercase",
                     }}
                   >
-                    {header}
+                    {header} · {formatMoney(dayTotal)}
                   </div>
 
                   <div style={{ display: "grid", gap: 12 }}>
@@ -318,7 +326,9 @@ export default function ReceiptsPage() {
                           gap: 10,
                         }}
                       >
-                        <div style={{ fontSize: 14, opacity: 0.9 }}>{r.place}</div>
+                        <div style={{ fontSize: 14, opacity: 0.9 }}>
+                          {r.place}
+                        </div>
 
                         <div
                           style={{
@@ -361,7 +371,9 @@ export default function ReceiptsPage() {
           </div>
         )}
 
-        <div style={{ fontSize: 11, opacity: 0.22 }}>Stored locally. Export recommended.</div>
+        <div style={{ fontSize: 11, opacity: 0.22 }}>
+          Stored locally. Export recommended.
+        </div>
       </section>
     </main>
   );
