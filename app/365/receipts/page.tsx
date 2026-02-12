@@ -7,7 +7,7 @@ type Receipt = {
   id: string;
   place: string;
   amount: number;
-  ts: number; // epoch ms
+  ts: number; // epoch ms (truth)
 };
 
 const STORAGE_KEY = "outflo_receipts_v1";
@@ -35,14 +35,15 @@ function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-function formatLocal(ts: number) {
+function formatReceiptTime(ts: number) {
   const d = new Date(ts);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export default function ReceiptsPage() {
@@ -60,20 +61,13 @@ export default function ReceiptsPage() {
     const backup = safeParseReceipts(localStorage.getItem(BACKUP_KEY));
     if (backup) {
       setReceipts(backup);
-      // restore primary if broken/missing
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(backup));
       } catch {}
     }
   }, []);
 
-  // Keep in sync if main page adds receipts (same tab)
-  // (This page is read-only; it just re-reads storage on mount.
-  // If you want live sync across tabs later, we can add the storage event.)
-  const count = receipts.length;
-
   const sortedReceipts = useMemo(() => {
-    // ensure newest-first even if storage gets weird
     return [...receipts].sort((a, b) => b.ts - a.ts);
   }, [receipts]);
 
@@ -104,13 +98,10 @@ export default function ReceiptsPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   function resetVault() {
-    // Hard gate: must type exact phrase
     const phrase = window.prompt('Type exactly: RESET OUTFLO');
     if (phrase !== "RESET OUTFLO") return;
 
@@ -135,6 +126,7 @@ export default function ReceiptsPage() {
       }}
     >
       <section style={{ width: "min(760px, 94vw)", display: "grid", gap: 14 }}>
+        {/* Top row */}
         <div
           style={{
             display: "flex",
@@ -165,12 +157,11 @@ export default function ReceiptsPage() {
               </button>
             </div>
           ) : (
-            <div style={{ fontSize: 12, opacity: 0.35 }}>
-              {/* no visible destructive controls */}
-            </div>
+            <div style={{ fontSize: 12, opacity: 0.35 }} />
           )}
         </div>
 
+        {/* Header */}
         <div style={{ display: "grid", gap: 6 }}>
           <div
             onClick={unlockAdmin}
@@ -184,52 +175,58 @@ export default function ReceiptsPage() {
           >
             Receipts
           </div>
+
           <div style={{ fontSize: 12, opacity: 0.45 }}>
             Total:{" "}
-            <span style={{ fontVariantNumeric: "tabular-nums" }}>{count}</span>
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>
+              {sortedReceipts.length}
+            </span>
           </div>
         </div>
 
+        {/* Receipt list */}
         {sortedReceipts.length === 0 ? (
           <div style={{ fontSize: 12, opacity: 0.35 }}>No receipts yet.</div>
         ) : (
-          <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ display: "grid", gap: 10 }}>
             {sortedReceipts.slice(0, 300).map((r) => (
               <div
                 key={r.id}
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  padding: "14px 14px",
+                  borderRadius: 16,
+                  border: "1px solid rgba(255,255,255,0.10)",
                   background: "rgba(255,255,255,0.03)",
-                  fontSize: 12,
+                  display: "grid",
+                  gap: 10,
                 }}
               >
-                <div style={{ display: "grid", gap: 2 }}>
-                  <div style={{ opacity: 0.9 }}>{r.place}</div>
-                  <div
-                    style={{
-                      opacity: 0.55,
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {formatLocal(r.ts)}
-                  </div>
+                {/* Place */}
+                <div style={{ fontSize: 14, opacity: 0.9 }}>{r.place}</div>
+
+                {/* Amount */}
+                <div
+                  style={{
+                    fontSize: 28,
+                    fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {formatMoney(r.amount)}
                 </div>
 
-                <div style={{ fontVariantNumeric: "tabular-nums" }}>
-                  {formatMoney(r.amount)}
+                {/* Time (human readable) */}
+                <div style={{ fontSize: 12, opacity: 0.55 }}>
+                  {formatReceiptTime(r.ts)}
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        <div style={{ fontSize: 11, opacity: 0.25, marginTop: 10 }}>
-          {/* tiny footer hint without advertising admin mode */}
+        {/* Footer hint */}
+        <div style={{ fontSize: 11, opacity: 0.22, marginTop: 10 }}>
           Stored locally. Export recommended.
         </div>
       </section>
@@ -256,4 +253,5 @@ const dangerButtonStyle: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
+
 
