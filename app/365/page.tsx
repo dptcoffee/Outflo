@@ -22,8 +22,8 @@ export default function ThreeSixFiveMenu() {
         <div style={{ fontSize: 13, opacity: 0.55 }}>365</div>
 
         <MenuLink href="/365/money" label="Money" />
-        <MenuLink href="/state/time" label="Time" />
-        <MenuLink href="/state" label="Calculate" />
+        <MenuLink href="/time" label="Time" />
+        <MenuLink href="/calculate" label="Calculate" />
       </section>
     </main>
   );
