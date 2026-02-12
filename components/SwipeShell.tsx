@@ -60,7 +60,7 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
           }}
         >
           <Pill href="/" active={pathname === "/"} label="Home" />
-          <Pill href="/365" active={pathname === "/365"} label="365" />
+          <Pill href="/365" active={pathname === "/365"} label="Systems" />
           <Pill href="/time" active={pathname === "/time"} label="Time" />
         </div>
       </nav>
