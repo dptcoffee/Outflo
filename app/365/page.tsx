@@ -13,7 +13,7 @@ export default function ThreeSixFiveMenu() {
       }}
     >
       <section style={{ width: "min(760px, 94vw)" }}>
-        <div style={{ fontSize: 13, opacity: 0.55, marginBottom: 14 }}>365</div>
+        <div style={{ fontSize: 13, opacity: 0.55, marginBottom: 14 }}>systems</div>
 
         <div
           style={{
