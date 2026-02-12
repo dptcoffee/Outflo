@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSwipe } from "../hooks/useSwipe";
 
-const ROUTES = ["/", "/365", "/state/time"];
+const ROUTES = ["/", "/365", "/time",];
 
 function idxOf(pathname: string) {
   const i = ROUTES.indexOf(pathname);
