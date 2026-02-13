@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Receipt = {
   id: string;
@@ -12,7 +13,6 @@ type Receipt = {
 
 const STORAGE_KEY = "outflo_receipts_v1";
 const BACKUP_KEY = "outflo_receipts_v1_backup";
-const LAST_EXPORT_KEY = "outflo_last_export_v1";
 
 function safeParseReceipts(raw: string | null): Receipt[] | null {
   if (!raw) return null;
@@ -137,6 +137,8 @@ function downloadTextFile(filename: string, content: string, mime: string) {
 }
 
 export default function ReceiptsPage() {
+  const router = useRouter();
+
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [tapCount, setTapCount] = useState(0);
 
@@ -205,39 +207,11 @@ export default function ReceiptsPage() {
     return out;
   }, [receipts]);
 
-  const showExport = tapCount >= 3;
+  const showCsv = tapCount >= 3;
   const showAdmin = tapCount >= 11;
 
   function onTapTitle() {
     setTapCount((n) => n + 1);
-  }
-
-  function exportJson() {
-    const payload = {
-      exportedAt: Date.now(),
-      version: 1,
-      receipts: [...receipts].sort((a, b) => b.ts - a.ts), // full vault
-    };
-
-    // Save last export for admin viewer
-    try {
-      localStorage.setItem(LAST_EXPORT_KEY, JSON.stringify(payload));
-    } catch {}
-
-    // Download file
-    try {
-      const blob = new Blob([JSON.stringify(payload, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `outflo_receipts_${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {}
   }
 
   function exportCsv() {
@@ -248,6 +222,12 @@ export default function ReceiptsPage() {
       csv,
       "text/csv;charset=utf-8"
     );
+  }
+
+  function goAdmin() {
+    const pw = window.prompt("Enter admin password");
+    if (pw !== "CALLIOPE") return;
+    router.push("/365/export");
   }
 
   return (
@@ -264,7 +244,7 @@ export default function ReceiptsPage() {
       <section
         style={{
           width: "100%",
-          maxWidth: 760, // keep your tuned value
+          maxWidth: 760,
           marginInline: "auto",
           display: "grid",
           gap: 16,
@@ -293,9 +273,9 @@ export default function ReceiptsPage() {
           </Link>
 
           {showAdmin ? (
-            <Link href="/365/export" style={pillLinkStyle}>
+            <button onClick={goAdmin} style={dangerButtonStyle}>
               Admin
-            </Link>
+            </button>
           ) : (
             <div style={{ fontSize: 12, opacity: 0.35 }} />
           )}
@@ -328,11 +308,8 @@ export default function ReceiptsPage() {
           </div>
 
           {/* Export controls (appear after 3 taps) */}
-          {showExport ? (
+          {showCsv ? (
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button onClick={exportJson} style={pillButtonStyle}>
-                Export JSON
-              </button>
               <button onClick={exportCsv} style={pillButtonStyle}>
                 Export CSV
               </button>
@@ -470,15 +447,14 @@ const pillButtonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const pillLinkStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.10)",
-  border: "1px solid rgba(255,255,255,0.14)",
+const dangerButtonStyle: React.CSSProperties = {
+  background: "rgba(255,60,60,0.12)",
+  border: "1px solid rgba(255,60,60,0.30)",
   color: "white",
   borderRadius: 999,
   padding: "8px 12px",
   fontSize: 12,
-  textDecoration: "none",
-  display: "inline-block",
+  cursor: "pointer",
 };
 
 
