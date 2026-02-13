@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 
 type Receipt = {
   id: string;
@@ -80,37 +79,65 @@ function sumDay(items: Receipt[]) {
   return s;
 }
 
-function hardResetOutfloZeroStart() {
-  // wipe everything we’ve created during this build
-  const KEYS = [
-    // receipts vault
-    "outflo_receipts_v1",
-    "outflo_receipts_v1_backup",
+/** CSV escaping (Excel-safe) */
+function csvEscape(v: string) {
+  if (v.includes('"')) v = v.replace(/"/g, '""');
+  const needsQuotes =
+    v.includes(",") || v.includes("\n") || v.includes("\r") || v.includes('"');
+  return needsQuotes ? `"${v}"` : v;
+}
 
-    // system clock epoch (Time page)
-    "outflo_system_epoch_v1",
+function formatLocalDate(ts: number) {
+  const d = new Date(ts);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
 
-    // any earlier home/app anchors used in iterations
-    "outflo_app_epoch_start_v1",
-    "outflo_epoch_start_v1",
-    "outflo_app_epoch_v1",
-    "outflo_epoch_start",
-    "outflo_epoch_v1",
+function formatLocalTime(ts: number) {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mi}`;
+}
 
-    // export cache
-    "outflo_last_export_v1",
-  ];
+function receiptsToCsv(receipts: Receipt[]) {
+  const header = ["ts", "localDate", "localTime", "place", "amount", "id"].join(
+    ","
+  );
+  const rows = receipts.map((r) => {
+    const fields = [
+      String(r.ts),
+      formatLocalDate(r.ts),
+      formatLocalTime(r.ts),
+      csvEscape(r.place),
+      r.amount.toFixed(2),
+      csvEscape(r.id),
+    ];
+    return fields.join(",");
+  });
 
+  // CRLF for Excel compatibility
+  return [header, ...rows].join("\r\n");
+}
+
+function downloadTextFile(filename: string, content: string, mime: string) {
   try {
-    for (const k of KEYS) localStorage.removeItem(k);
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   } catch {}
 }
 
 export default function ReceiptsPage() {
-  const router = useRouter();
-
   const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [admin, setAdmin] = useState(false);
   const [tapCount, setTapCount] = useState(0);
 
   // Load primary -> backup fallback
@@ -178,13 +205,11 @@ export default function ReceiptsPage() {
     return out;
   }, [receipts]);
 
-  function unlockAdmin() {
-    const next = tapCount + 1;
-    setTapCount(next);
-    if (next >= 7) {
-      setAdmin(true);
-      setTapCount(0);
-    }
+  const showExport = tapCount >= 3;
+  const showAdmin = tapCount >= 11;
+
+  function onTapTitle() {
+    setTapCount((n) => n + 1);
   }
 
   function exportJson() {
@@ -194,12 +219,12 @@ export default function ReceiptsPage() {
       receipts: [...receipts].sort((a, b) => b.ts - a.ts), // full vault
     };
 
-    // 1) Save last export for instant viewing
+    // Save last export for admin viewer
     try {
       localStorage.setItem(LAST_EXPORT_KEY, JSON.stringify(payload));
     } catch {}
 
-    // 2) Download file
+    // Download file
     try {
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: "application/json",
@@ -213,31 +238,16 @@ export default function ReceiptsPage() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch {}
-
-    // 3) Auto-open viewer
-    router.push("/365/export");
   }
 
-  function resetVault() {
-    const phrase = window.prompt('Type exactly: RESET OUTFLO');
-    if (phrase !== "RESET OUTFLO") return;
-
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(BACKUP_KEY);
-    } catch {}
-
-    setReceipts([]);
-    setAdmin(false);
-  }
-
-  function hardResetZeroStart() {
-    const phrase = window.prompt("Type exactly: ZERO OUTFLO");
-    if (phrase !== "ZERO OUTFLO") return;
-
-    hardResetOutfloZeroStart();
-    // hard start
-    location.href = "/";
+  function exportCsv() {
+    const sorted = [...receipts].sort((a, b) => b.ts - a.ts); // full vault
+    const csv = receiptsToCsv(sorted);
+    downloadTextFile(
+      `outflo_receipts_${Date.now()}.csv`,
+      csv,
+      "text/csv;charset=utf-8"
+    );
   }
 
   return (
@@ -251,11 +261,10 @@ export default function ReceiptsPage() {
         padding: "max(24px, 6vh) 24px",
       }}
     >
-      {/* Centering fix: remove vw width math; rely on maxWidth + margin auto */}
       <section
         style={{
           width: "100%",
-          maxWidth: 900,
+          maxWidth: 760, // keep your tuned value
           marginInline: "auto",
           display: "grid",
           gap: 16,
@@ -283,16 +292,10 @@ export default function ReceiptsPage() {
             ← Back
           </Link>
 
-          {admin ? (
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button onClick={exportJson} style={pillButtonStyle}>
-                Export
-              </button>
-              <button onClick={resetVault} style={pillButtonStyle}>
-                Soft Reset
-              </button>
-              {/* Hard Reset removed from this page (moved to Export page) */}
-            </div>
+          {showAdmin ? (
+            <Link href="/365/export" style={pillLinkStyle}>
+              Admin
+            </Link>
           ) : (
             <div style={{ fontSize: 12, opacity: 0.35 }} />
           )}
@@ -301,14 +304,14 @@ export default function ReceiptsPage() {
         {/* Header */}
         <div style={{ display: "grid", gap: 6 }}>
           <div
-            onClick={unlockAdmin}
+            onClick={onTapTitle}
             style={{
               fontSize: 13,
               opacity: 0.85,
               userSelect: "none",
               cursor: "default",
             }}
-            title="(tap 7x)"
+            title="(tap 3x for export · 11x for admin)"
           >
             Receipts
           </div>
@@ -323,6 +326,18 @@ export default function ReceiptsPage() {
               · showing latest {sortedLimited.length}
             </span>
           </div>
+
+          {/* Export controls (appear after 3 taps) */}
+          {showExport ? (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button onClick={exportJson} style={pillButtonStyle}>
+                Export JSON
+              </button>
+              <button onClick={exportCsv} style={pillButtonStyle}>
+                Export CSV
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {/* Grouped by day */}
@@ -455,14 +470,15 @@ const pillButtonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const dangerButtonStyle: React.CSSProperties = {
-  background: "rgba(255,60,60,0.14)",
-  border: "1px solid rgba(255,60,60,0.35)",
+const pillLinkStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.10)",
+  border: "1px solid rgba(255,255,255,0.14)",
   color: "white",
   borderRadius: 999,
   padding: "8px 12px",
   fontSize: 12,
-  cursor: "pointer",
+  textDecoration: "none",
+  display: "inline-block",
 };
 
 
