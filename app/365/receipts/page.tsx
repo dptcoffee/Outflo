@@ -151,6 +151,33 @@ export default function ReceiptsPage() {
     return { order, map };
   }, [sortedLimited]);
 
+  // Per-receipt "day cumulative at that moment" (computed chronologically, rendered newest-first)
+  const dayCumById = useMemo(() => {
+    const out = new Map<string, number>();
+
+    const byDay = new Map<string, Receipt[]>();
+    for (const r of receipts) {
+      const k = dayKeyLocal(r.ts);
+      if (!byDay.has(k)) byDay.set(k, []);
+      byDay.get(k)!.push(r);
+    }
+
+    for (const [, items] of byDay) {
+      const asc = [...items].sort((a, b) => {
+        if (a.ts !== b.ts) return a.ts - b.ts;
+        return a.id.localeCompare(b.id); // deterministic for ts collisions
+      });
+
+      let s = 0;
+      for (const r of asc) {
+        s += r.amount;
+        out.set(r.id, s);
+      }
+    }
+
+    return out;
+  }, [receipts]);
+
   function unlockAdmin() {
     const next = tapCount + 1;
     setTapCount(next);
@@ -224,7 +251,17 @@ export default function ReceiptsPage() {
         padding: "max(24px, 6vh) 24px",
       }}
     >
-      <section style={{ width: "min(760px, 94vw)", display: "grid", gap: 16 }}>
+      {/* Centering fix: remove vw width math; rely on maxWidth + margin auto */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 760,
+          marginInline: "auto",
+          display: "grid",
+          gap: 16,
+          boxSizing: "border-box",
+        }}
+      >
         {/* Top row */}
         <div
           style={{
@@ -252,11 +289,9 @@ export default function ReceiptsPage() {
                 Export
               </button>
               <button onClick={resetVault} style={pillButtonStyle}>
-                Reset Vault
+                Soft Reset
               </button>
-              <button onClick={hardResetZeroStart} style={dangerButtonStyle}>
-                Hard Reset (Zero Start)
-              </button>
+              {/* Hard Reset removed from this page (moved to Export page) */}
             </div>
           ) : (
             <div style={{ fontSize: 12, opacity: 0.35 }} />
@@ -314,56 +349,87 @@ export default function ReceiptsPage() {
                   </div>
 
                   <div style={{ display: "grid", gap: 12 }}>
-                    {items.map((r) => (
-                      <div
-                        key={r.id}
-                        style={{
-                          padding: "16px",
-                          borderRadius: 18,
-                          border: "1px solid rgba(255,255,255,0.10)",
-                          background: "rgba(255,255,255,0.03)",
-                          display: "grid",
-                          gap: 10,
-                        }}
-                      >
-                        <div style={{ fontSize: 14, opacity: 0.9 }}>
-                          {r.place}
-                        </div>
+                    {items.map((r) => {
+                      const cum = dayCumById.get(r.id);
+                      const cumText = formatMoney(
+                        typeof cum === "number" ? cum : r.amount
+                      );
 
+                      return (
                         <div
+                          key={r.id}
                           style={{
-                            fontSize: 30,
-                            fontWeight: 700,
-                            fontVariantNumeric: "tabular-nums",
-                            letterSpacing: "-0.02em",
+                            padding: "16px",
+                            borderRadius: 18,
+                            border: "1px solid rgba(255,255,255,0.10)",
+                            background: "rgba(255,255,255,0.03)",
+                            display: "grid",
+                            gap: 10,
                           }}
                         >
-                          {formatMoney(r.amount)}
-                        </div>
-
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "baseline",
-                            fontSize: 12,
-                            opacity: 0.55,
-                          }}
-                        >
-                          <span>{formatReceiptTime(r.ts)}</span>
-
-                          <span
+                          {/* Tile top row: merchant left, day-cumulative snapshot right */}
+                          <div
                             style={{
-                              fontVariantNumeric: "tabular-nums",
-                              letterSpacing: "0.05em",
-                              opacity: 0.7,
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "baseline",
+                              gap: 12,
                             }}
                           >
-                            #{receiptSuffix(r.id)}
-                          </span>
+                            <div style={{ fontSize: 14, opacity: 0.9 }}>
+                              {r.place}
+                            </div>
+
+                            <div
+                              style={{
+                                fontSize: 12,
+                                opacity: 0.55,
+                                fontVariantNumeric: "tabular-nums",
+                                letterSpacing: "0.02em",
+                                textAlign: "right",
+                                whiteSpace: "nowrap",
+                              }}
+                              title="Day cumulative at this moment"
+                            >
+                              {cumText}
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              fontSize: 30,
+                              fontWeight: 700,
+                              fontVariantNumeric: "tabular-nums",
+                              letterSpacing: "-0.02em",
+                            }}
+                          >
+                            {formatMoney(r.amount)}
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "baseline",
+                              fontSize: 12,
+                              opacity: 0.55,
+                            }}
+                          >
+                            <span>{formatReceiptTime(r.ts)}</span>
+
+                            <span
+                              style={{
+                                fontVariantNumeric: "tabular-nums",
+                                letterSpacing: "0.05em",
+                                opacity: 0.7,
+                              }}
+                            >
+                              #{receiptSuffix(r.id)}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
