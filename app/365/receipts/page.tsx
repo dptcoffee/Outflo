@@ -255,7 +255,7 @@ export default function ReceiptsPage() {
       <section
         style={{
           width: "100%",
-          maxWidth: 820,
+          maxWidth: 870,
           marginInline: "auto",
           display: "grid",
           gap: 16,
