@@ -29,7 +29,9 @@ function pad3(n: number) {
 
 function formatClock(ts: number) {
   const d = new Date(ts);
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}:${pad3(d.getMilliseconds())}`;
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(
+    d.getSeconds()
+  )}:${pad3(d.getMilliseconds())}`;
 }
 
 function formatMoney(n: number) {
@@ -54,6 +56,21 @@ function formatReceiptTime(ts: number) {
   return `${date} · ${time}`;
 }
 
+function formatLocalDate(ts: number) {
+  const d = new Date(ts);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatLocalTime(ts: number) {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mi}`;
+}
+
 function safeParseExport(raw: string): ExportPayloadV1 | null {
   try {
     const p = JSON.parse(raw);
@@ -63,12 +80,13 @@ function safeParseExport(raw: string): ExportPayloadV1 | null {
     if (!Array.isArray(p.receipts)) return null;
 
     const receipts: Receipt[] = p.receipts
-      .filter((r: any) =>
-        r &&
-        typeof r.id === "string" &&
-        typeof r.place === "string" &&
-        typeof r.amount === "number" &&
-        typeof r.ts === "number"
+      .filter(
+        (r: any) =>
+          r &&
+          typeof r.id === "string" &&
+          typeof r.place === "string" &&
+          typeof r.amount === "number" &&
+          typeof r.ts === "number"
       )
       .map((r: any) => ({
         id: r.id,
@@ -87,6 +105,74 @@ function safeParseExport(raw: string): ExportPayloadV1 | null {
   }
 }
 
+/** CSV escaping (Excel-safe) */
+function csvEscape(v: string) {
+  if (v.includes('"')) v = v.replace(/"/g, '""');
+  const needsQuotes = v.includes(",") || v.includes("\n") || v.includes("\r") || v.includes('"');
+  return needsQuotes ? `"${v}"` : v;
+}
+
+function receiptsToCsv(receipts: Receipt[]) {
+  const header = ["ts", "localDate", "localTime", "place", "amount", "id"].join(
+    ","
+  );
+  const rows = receipts.map((r) => {
+    const fields = [
+      String(r.ts),
+      formatLocalDate(r.ts),
+      formatLocalTime(r.ts),
+      csvEscape(r.place),
+      // amount as dollars (no $) for Excel math/pivots
+      r.amount.toFixed(2),
+      csvEscape(r.id),
+    ];
+    return fields.join(",");
+  });
+
+  // Use CRLF for best Excel compatibility
+  return [header, ...rows].join("\r\n");
+}
+
+function downloadTextFile(filename: string, content: string, mime: string) {
+  try {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch {}
+}
+
+function hardResetOutfloZeroStart() {
+  // wipe everything we’ve created during this build
+  const KEYS = [
+    // receipts vault
+    "outflo_receipts_v1",
+    "outflo_receipts_v1_backup",
+
+    // system clock epoch (Time page)
+    "outflo_system_epoch_v1",
+
+    // any earlier home/app anchors used in iterations
+    "outflo_app_epoch_start_v1",
+    "outflo_epoch_start_v1",
+    "outflo_app_epoch_v1",
+    "outflo_epoch_start",
+    "outflo_epoch_v1",
+
+    // export cache
+    "outflo_last_export_v1",
+  ];
+
+  try {
+    for (const k of KEYS) localStorage.removeItem(k);
+  } catch {}
+}
+
 export default function ExportViewerPage() {
   const [clockTs, setClockTs] = useState(() => Date.now());
   useEffect(() => {
@@ -97,7 +183,7 @@ export default function ExportViewerPage() {
   const [payload, setPayload] = useState<ExportPayloadV1 | null>(null);
   const [error, setError] = useState<string>("");
 
-  // admin unlock for restore (tap title 7x)
+  // admin unlock for restore + resets (tap title 7x)
   const [admin, setAdmin] = useState(false);
   const [tapCount, setTapCount] = useState(0);
 
@@ -146,7 +232,7 @@ export default function ExportViewerPage() {
   function restoreToVault() {
     if (!payload) return;
 
-    const phrase = window.prompt('Type exactly: RESTORE OUTFLO');
+    const phrase = window.prompt("Type exactly: RESTORE OUTFLO");
     if (phrase !== "RESTORE OUTFLO") return;
 
     try {
@@ -157,6 +243,37 @@ export default function ExportViewerPage() {
     } catch {
       alert("Restore failed.");
     }
+  }
+
+  function exportCsv() {
+    if (!payload) {
+      setError("No payload loaded. Load an export first.");
+      return;
+    }
+    setError("");
+
+    const csv = receiptsToCsv(sortedReceipts);
+    downloadTextFile(`outflo_receipts_${Date.now()}.csv`, csv, "text/csv");
+  }
+
+  function softResetVault() {
+    const phrase = window.prompt("Type exactly: RESET OUTFLO");
+    if (phrase !== "RESET OUTFLO") return;
+
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(BACKUP_KEY);
+    } catch {}
+
+    alert("Vault cleared (soft reset).");
+  }
+
+  function hardResetZeroStart() {
+    const phrase = window.prompt("Type exactly: ZERO OUTFLO");
+    if (phrase !== "ZERO OUTFLO") return;
+
+    hardResetOutfloZeroStart();
+    location.href = "/";
   }
 
   return (
@@ -170,7 +287,17 @@ export default function ExportViewerPage() {
         padding: "max(24px, 6vh) 24px",
       }}
     >
-      <section style={{ width: "min(760px, 94vw)", display: "grid", gap: 16 }}>
+      {/* Centering fix: remove vw width math; rely on maxWidth + margin auto */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 760,
+          marginInline: "auto",
+          display: "grid",
+          gap: 16,
+          boxSizing: "border-box",
+        }}
+      >
         {/* top row */}
         <div
           style={{
@@ -192,13 +319,26 @@ export default function ExportViewerPage() {
             ← Back
           </Link>
 
-          <div style={{ fontSize: 12, opacity: 0.75, fontVariantNumeric: "tabular-nums" }}>
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.75,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
             {formatClock(clockTs)}
           </div>
         </div>
 
         {/* title + optional restore */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: 12,
+          }}
+        >
           <div
             onClick={unlockAdmin}
             style={{
@@ -221,7 +361,7 @@ export default function ExportViewerPage() {
           )}
         </div>
 
-        {/* optional file input (still available) */}
+        {/* file input + csv export */}
         <div style={{ display: "grid", gap: 10 }}>
           <input
             type="file"
@@ -229,7 +369,32 @@ export default function ExportViewerPage() {
             onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
             style={fileStyle}
           />
-          {error ? <div style={{ fontSize: 12, opacity: 0.6 }}>{error}</div> : null}
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              onClick={exportCsv}
+              style={pillButtonStyle}
+              disabled={!payload}
+              title={payload ? "Export CSV of loaded payload" : "Load an export first"}
+            >
+              Export CSV
+            </button>
+
+            {admin ? (
+              <>
+                <button onClick={softResetVault} style={pillButtonStyle}>
+                  Soft Reset
+                </button>
+                <button onClick={hardResetZeroStart} style={dangerButtonStyle}>
+                  Hard Reset (Zero Start)
+                </button>
+              </>
+            ) : null}
+          </div>
+
+          {error ? (
+            <div style={{ fontSize: 12, opacity: 0.6 }}>{error}</div>
+          ) : null}
         </div>
 
         {/* render */}
@@ -295,6 +460,17 @@ const fileStyle: React.CSSProperties = {
   color: "white",
   fontSize: 14,
   outline: "none",
+};
+
+const pillButtonStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.10)",
+  border: "1px solid rgba(255,255,255,0.14)",
+  color: "white",
+  borderRadius: 999,
+  padding: "8px 12px",
+  fontSize: 12,
+  cursor: "pointer",
+  opacity: 1,
 };
 
 const dangerButtonStyle: React.CSSProperties = {
