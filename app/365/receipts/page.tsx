@@ -351,7 +351,8 @@ export default function ReceiptsPage() {
                       return (
                         <Link
                           key={r.id}
-                          href={`/365/receipts/${r.id}`}
+                          // IMPORTANT: encode id for URL safety
+                          href={`/365/receipts/${encodeURIComponent(r.id)}`}
                           style={{
                             textDecoration: "none",
                             color: "inherit",
@@ -466,6 +467,7 @@ const dangerButtonStyle: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
+
 
 
 

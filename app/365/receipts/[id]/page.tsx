@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 type Receipt = {
   id: string;
@@ -40,7 +40,6 @@ function formatMoney(n: number) {
 }
 
 function formatHeroWhen(ts: number) {
-  // “Today at 4:09 PM” style (simple for now)
   const d = new Date(ts);
   const date = d.toLocaleDateString("en-US", {
     month: "short",
@@ -72,7 +71,6 @@ function dayCumulativeAtMoment(target: Receipt, receipts: Receipt[]) {
   const k = dayKeyLocal(target.ts);
   const sameDay = receipts.filter((r) => dayKeyLocal(r.ts) === k);
 
-  // chronological asc so we can compute cumulative at target moment
   const asc = [...sameDay].sort((a, b) => {
     if (a.ts !== b.ts) return a.ts - b.ts;
     return a.id.localeCompare(b.id);
@@ -83,17 +81,16 @@ function dayCumulativeAtMoment(target: Receipt, receipts: Receipt[]) {
     s += r.amount;
     if (r.id === target.id) return s;
   }
-  // fallback
   return target.amount;
 }
 
-export default function ReceiptDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function ReceiptDetailPage() {
   const router = useRouter();
-  const id = params.id;
+  const params = useParams();
+
+  // IMPORTANT: client-safe param extraction (fixes mobile Safari / prod weirdness)
+  const raw = params?.id;
+  const id = Array.isArray(raw) ? raw[0] : (raw ?? "");
 
   const [loaded, setLoaded] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -121,7 +118,15 @@ export default function ReceiptDetailPage({
   }, []);
 
   const receipt = useMemo(() => {
-    return receipts.find((r) => r.id === id) ?? null;
+    if (!id) return null;
+
+    // Router often gives decoded values already; this covers both.
+    const r =
+      receipts.find((x) => x.id === id) ??
+      receipts.find((x) => x.id === decodeURIComponent(id)) ??
+      null;
+
+    return r;
   }, [receipts, id]);
 
   const engine = useMemo(() => {
@@ -135,15 +140,12 @@ export default function ReceiptDetailPage({
 
     const total365 = receipts.reduce((s, r) => s + r.amount, 0);
 
-    // index in day (chronological)
     const asc = [...sameDay].sort((a, b) => {
       if (a.ts !== b.ts) return a.ts - b.ts;
       return a.id.localeCompare(b.id);
     });
-    const idx = Math.max(
-      0,
-      asc.findIndex((r) => r.id === receipt.id)
-    );
+
+    const idx = Math.max(0, asc.findIndex((r) => r.id === receipt.id));
 
     return {
       dayCum,
@@ -155,8 +157,6 @@ export default function ReceiptDetailPage({
   }, [receipt, receipts]);
 
   function close() {
-    // overlay close like CashApp
-    // if there is no history, go back to list
     try {
       router.back();
     } catch {
@@ -164,7 +164,7 @@ export default function ReceiptDetailPage({
     }
   }
 
-  // LOADING GATE (prevents false “not found”)
+  // LOADING GATE
   if (!loaded) {
     return (
       <main style={overlayWrap}>
@@ -189,8 +189,12 @@ export default function ReceiptDetailPage({
 
           <div style={{ display: "grid", gap: 10 }}>
             <div style={{ fontSize: 16, opacity: 0.9 }}>Receipt not found.</div>
+
             <div style={{ fontSize: 12, opacity: 0.55 }}>
-              id: <span style={{ fontVariantNumeric: "tabular-nums" }}>{id}</span>
+              id:{" "}
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                {id || "(empty)"}
+              </span>
               {" · "}
               vault:{" "}
               <span style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -210,7 +214,6 @@ export default function ReceiptDetailPage({
     );
   }
 
-  // CASHAPP-ISH HERO STACK (simple + locked)
   return (
     <main style={overlayWrap}>
       <div style={sheetStyle}>
@@ -231,12 +234,13 @@ export default function ReceiptDetailPage({
           />
 
           <div style={{ display: "grid", gap: 4 }}>
-            <div style={{ fontSize: 34, fontWeight: 650, letterSpacing: "-0.02em" }}>
+            <div
+              style={{ fontSize: 34, fontWeight: 650, letterSpacing: "-0.02em" }}
+            >
               {receipt.place}
             </div>
 
             <div style={{ fontSize: 14, opacity: 0.55 }}>
-              {/* placeholder location for now */}
               {formatHeroWhen(receipt.ts)}
             </div>
           </div>
@@ -258,7 +262,10 @@ export default function ReceiptDetailPage({
 
         {/* ENGINE / CONTEXT */}
         <div style={block}>
-          <Row label="Day cumulative (at this moment)" value={formatMoney(engine!.dayCum)} />
+          <Row
+            label="Day cumulative (at this moment)"
+            value={formatMoney(engine!.dayCum)}
+          />
           <Row label="365 rolling total" value={formatMoney(engine!.total365)} />
         </div>
 
@@ -277,7 +284,7 @@ export default function ReceiptDetailPage({
 
         <div style={divider} />
 
-        {/* EXPLORE / ACTIONS (placeholders for now) */}
+        {/* EXPLORE / ACTIONS */}
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ fontSize: 22, fontWeight: 650 }}>Explore</div>
 
@@ -290,7 +297,7 @@ export default function ReceiptDetailPage({
 
         <div style={divider} />
 
-        {/* CONTACT / FOOTER PLACEHOLDER */}
+        {/* FOOTER */}
         <div style={{ fontSize: 13, opacity: 0.55, lineHeight: 1.45 }}>
           Outflō (placeholder)
           <br />
