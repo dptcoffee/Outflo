@@ -1,3 +1,4 @@
+// app/365/receipts/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -348,78 +349,87 @@ export default function ReceiptsPage() {
                       );
 
                       return (
-                        <div
+                        <Link
                           key={r.id}
+                          href={`/365/receipts/${encodeURIComponent(r.id)}`}
                           style={{
-                            padding: "16px",
-                            borderRadius: 18,
-                            border: "1px solid rgba(255,255,255,0.10)",
-                            background: "rgba(255,255,255,0.03)",
-                            display: "grid",
-                            gap: 10,
+                            textDecoration: "none",
+                            color: "inherit",
+                            display: "block",
                           }}
                         >
-                          {/* Tile top row: merchant left, day-cumulative snapshot right */}
                           <div
                             style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "baseline",
-                              gap: 12,
+                              padding: "16px",
+                              borderRadius: 18,
+                              border: "1px solid rgba(255,255,255,0.10)",
+                              background: "rgba(255,255,255,0.03)",
+                              display: "grid",
+                              gap: 10,
                             }}
                           >
-                            <div style={{ fontSize: 14, opacity: 0.9 }}>
-                              {r.place}
+                            {/* Tile top row: merchant left, day-cumulative snapshot right */}
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "baseline",
+                                gap: 12,
+                              }}
+                            >
+                              <div style={{ fontSize: 14, opacity: 0.9 }}>
+                                {r.place}
+                              </div>
+
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  opacity: 0.55,
+                                  fontVariantNumeric: "tabular-nums",
+                                  letterSpacing: "0.02em",
+                                  textAlign: "right",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title="Day cumulative at this moment"
+                              >
+                                {cumText}
+                              </div>
                             </div>
 
                             <div
                               style={{
+                                fontSize: 30,
+                                fontWeight: 700,
+                                fontVariantNumeric: "tabular-nums",
+                                letterSpacing: "-0.02em",
+                              }}
+                            >
+                              {formatMoney(r.amount)}
+                            </div>
+
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "baseline",
                                 fontSize: 12,
                                 opacity: 0.55,
-                                fontVariantNumeric: "tabular-nums",
-                                letterSpacing: "0.02em",
-                                textAlign: "right",
-                                whiteSpace: "nowrap",
                               }}
-                              title="Day cumulative at this moment"
                             >
-                              {cumText}
+                              <span>{formatReceiptTime(r.ts)}</span>
+
+                              <span
+                                style={{
+                                  fontVariantNumeric: "tabular-nums",
+                                  letterSpacing: "0.05em",
+                                  opacity: 0.7,
+                                }}
+                              >
+                                #{receiptSuffix(r.id)}
+                              </span>
                             </div>
                           </div>
-
-                          <div
-                            style={{
-                              fontSize: 30,
-                              fontWeight: 700,
-                              fontVariantNumeric: "tabular-nums",
-                              letterSpacing: "-0.02em",
-                            }}
-                          >
-                            {formatMoney(r.amount)}
-                          </div>
-
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "baseline",
-                              fontSize: 12,
-                              opacity: 0.55,
-                            }}
-                          >
-                            <span>{formatReceiptTime(r.ts)}</span>
-
-                            <span
-                              style={{
-                                fontVariantNumeric: "tabular-nums",
-                                letterSpacing: "0.05em",
-                                opacity: 0.7,
-                              }}
-                            >
-                              #{receiptSuffix(r.id)}
-                            </span>
-                          </div>
-                        </div>
+                        </Link>
                       );
                     })}
                   </div>
