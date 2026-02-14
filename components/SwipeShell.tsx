@@ -16,6 +16,9 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Hide bottom nav on drill-down pages (e.g. receipt detail)
+  const hideNav = pathname.startsWith("/365/receipts/");
+
   const { left, right } = useMemo(() => {
     const i = idxOf(pathname);
     const left = ROUTES[Math.min(i + 1, ROUTES.length - 1)];
@@ -36,39 +39,49 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
     >
       {children}
 
-      <nav
-        style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: 18,
-          display: "flex",
-          justifyContent: "center",
-          pointerEvents: "none",
-        }}
-      >
-        <div
+      {!hideNav && (
+        <nav
           style={{
-            pointerEvents: "auto",
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 18,
             display: "flex",
-            gap: 10,
-            padding: "10px 12px",
-            borderRadius: 999,
-            border: "1px solid rgba(255,255,255,0.10)",
-            background: "rgba(0,0,0,0.55)",
-            backdropFilter: "blur(10px)",
+            justifyContent: "center",
+            pointerEvents: "none",
           }}
         >
-          <Pill href="/" active={pathname === "/"} label="Home" />
-          <Pill href="/365" active={pathname === "/365"} label="Systems" />
-          <Pill href="/time" active={pathname === "/time"} label="Time" />
-        </div>
-      </nav>
+          <div
+            style={{
+              pointerEvents: "auto",
+              display: "flex",
+              gap: 10,
+              padding: "10px 12px",
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.10)",
+              background: "rgba(0,0,0,0.55)",
+              backdropFilter: "blur(10px)",
+            }}
+          >
+            <Pill href="/" active={pathname === "/"} label="Home" />
+            <Pill href="/365" active={pathname === "/365"} label="Systems" />
+            <Pill href="/time" active={pathname === "/time"} label="Time" />
+          </div>
+        </nav>
+      )}
     </div>
   );
 }
 
-function Pill({ href, label, active }: { href: string; label: string; active: boolean }) {
+function Pill({
+  href,
+  label,
+  active,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+}) {
   return (
     <Link
       href={href}
@@ -79,12 +92,15 @@ function Pill({ href, label, active }: { href: string; label: string; active: bo
         opacity: active ? 1 : 0.55,
         padding: "8px 12px",
         borderRadius: 999,
-        border: active ? "1px solid rgba(255,255,255,0.20)" : "1px solid transparent",
+        border: active
+          ? "1px solid rgba(255,255,255,0.20)"
+          : "1px solid transparent",
       }}
     >
       {label}
     </Link>
   );
 }
+
 
 
