@@ -68,27 +68,6 @@ function getOrCreateSystemEpoch(): number {
   }
 }
 
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
-}
-
-/** Duration since epoch start -> "Day X · HH:MM:SS" */
-function formatUserEpochRuntime(now: number, epochStart: number) {
-  let elapsedMs = now - epochStart;
-  if (!Number.isFinite(elapsedMs)) elapsedMs = 0;
-  if (elapsedMs < 0) elapsedMs = 0;
-
-  const totalSeconds = Math.floor(elapsedMs / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const rem = totalSeconds % 86400;
-  const h = Math.floor(rem / 3600);
-  const m = Math.floor((rem % 3600) / 60);
-  const s = rem % 60;
-
-  // "Day 0" is acceptable early; if you prefer Day 1, change to (days + 1)
-  return `Day ${days} · ${pad2(h)}:${pad2(m)}:${pad2(s)}`;
-}
-
 /* ---------------- formatting ---------------- */
 
 function formatMoney(n: number) {
@@ -202,15 +181,10 @@ export default function ReceiptDetailPage() {
   const [loaded, setLoaded] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [systemEpoch, setSystemEpoch] = useState<number | null>(null);
-  const [now, setNow] = useState(() => Date.now());
 
+  // connect to Time epoch origin (create if missing)
   useEffect(() => {
-    // connect to Time system epoch
     setSystemEpoch(getOrCreateSystemEpoch());
-
-    // live clock (user epoch time)
-    const tick = window.setInterval(() => setNow(Date.now()), 250);
-    return () => window.clearInterval(tick);
   }, []);
 
   // load receipts (primary -> backup)
@@ -269,6 +243,28 @@ export default function ReceiptDetailPage() {
       dayTotal: sumDay(sameDay),
     };
   }, [receipt, receipts]);
+
+  // ----- Captured User Epoch Time (Stamped at Receipt Moment) -----
+  let userEpochTime = "(unavailable)";
+  if (systemEpoch != null && receipt != null) {
+    const elapsedMs = Math.max(0, receipt.ts - systemEpoch);
+
+    const totalSeconds = Math.floor(elapsedMs / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const remainder = totalSeconds % 86400;
+
+    const hours = Math.floor(remainder / 3600);
+    const minutes = Math.floor((remainder % 3600) / 60);
+    const seconds = remainder % 60;
+
+    const dayLabel = days === 1 ? "day" : "days";
+
+    userEpochTime =
+      `${days} ${dayLabel} · ` +
+      `${String(hours).padStart(2, "0")}:` +
+      `${String(minutes).padStart(2, "0")}:` +
+      `${String(seconds).padStart(2, "0")}`;
+  }
 
   function close() {
     try {
@@ -345,12 +341,9 @@ export default function ReceiptDetailPage() {
   const merchantName = (receipt.place || "").trim() || "Merchant";
   const exploreDate = formatExploreDate(receipt.ts);
 
-  const userEpochTime =
-    systemEpoch != null ? formatUserEpochRuntime(now, systemEpoch) : "(unavailable)";
-
   return (
     <main style={wrap}>
-      {/* X truly pinned to viewport left */}
+      {/* X pinned to viewport left with black plate */}
       <button onClick={close} style={xFixed} aria-label="Close">
         ×
       </button>
@@ -376,7 +369,7 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* 2) Position (city/state only; no street/zip) */}
+        {/* 2) Position */}
         <section style={section}>
           <Title>Position</Title>
 
@@ -428,20 +421,22 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* 4) Explore (compact, no row borders) */}
+        {/* 4) Explore */}
         <section style={section}>
           <Title>Explore</Title>
 
           <div style={menu}>
             <MenuItem label={`See all your transactions for ${exploreDate}`} />
-            <MenuItem label={`View your ${merchantName} transactions across time`} />
+            <MenuItem
+              label={`View your ${merchantName} transactions across time`}
+            />
             <MenuItem label="Learn how the Engine works" />
           </div>
         </section>
 
         <div style={sectionDivider} />
 
-        {/* 5) Institutional Footer (single-line stacked, then space, then URL) */}
+        {/* 5) Institutional Footer */}
         <section style={footerSection}>
           <div style={footerBrand}>Outflō</div>
           <div style={footerLine}>{FOOTER_STREET}</div>
@@ -521,19 +516,20 @@ const frame: React.CSSProperties = {
   position: "relative",
 };
 
-// KEY: fixed to viewport so it can be truly left
+// fixed to viewport + black plate
 const xFixed: React.CSSProperties = {
   position: "fixed",
-  top: 8,
-  left: 6,
+  top: 12,
+  left: 12,
   width: 40,
   height: 40,
   lineHeight: "40px",
   padding: 0,
-  background: "rgba(0,0,0,0.9)", // ← black anchor
+  borderRadius: 999,
+  background: "rgba(0,0,0,0.9)",
   border: "none",
   color: "white",
-  fontSize: 28,
+  fontSize: 26,
   opacity: 1,
   cursor: "pointer",
   zIndex: 50,
@@ -633,7 +629,7 @@ const rowValue: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-/* Explore (compact, no lines) */
+/* Explore (compact, no borders) */
 const menu: React.CSSProperties = {
   display: "grid",
   gap: 10,
@@ -658,10 +654,10 @@ const chev: React.CSSProperties = {
   lineHeight: "22px",
 };
 
-/* Footer: single-line stack, then space, then URL */
+/* Footer: tight lines, then space, then URL */
 const footerSection: React.CSSProperties = {
   display: "grid",
-  gap: 2, // tight single-line spacing
+  gap: 2,
   padding: "10px 0 32px",
 };
 
