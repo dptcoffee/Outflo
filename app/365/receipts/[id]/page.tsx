@@ -52,7 +52,7 @@ function safeParseReceipts(raw: string | null): Receipt[] | null {
   }
 }
 
-/* ---------------- time/formatting ---------------- */
+/* ---------------- epoch helpers ---------------- */
 
 function getOrCreateSystemEpoch(): number {
   try {
@@ -67,6 +67,29 @@ function getOrCreateSystemEpoch(): number {
     return Date.now();
   }
 }
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+/** Duration since epoch start -> "Day X · HH:MM:SS" */
+function formatUserEpochRuntime(now: number, epochStart: number) {
+  let elapsedMs = now - epochStart;
+  if (!Number.isFinite(elapsedMs)) elapsedMs = 0;
+  if (elapsedMs < 0) elapsedMs = 0;
+
+  const totalSeconds = Math.floor(elapsedMs / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const rem = totalSeconds % 86400;
+  const h = Math.floor(rem / 3600);
+  const m = Math.floor((rem % 3600) / 60);
+  const s = rem % 60;
+
+  // "Day 0" is acceptable early; if you prefer Day 1, change to (days + 1)
+  return `Day ${days} · ${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+}
+
+/* ---------------- formatting ---------------- */
 
 function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
@@ -84,6 +107,15 @@ function formatHeroDateTime(ts: number) {
     minute: "2-digit",
   });
   return `${date} · ${time}`;
+}
+
+function formatExploreDate(ts: number) {
+  const d = new Date(ts);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 // Ledger: time only (24h + seconds), no date
@@ -170,11 +202,19 @@ export default function ReceiptDetailPage() {
   const [loaded, setLoaded] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [systemEpoch, setSystemEpoch] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     // connect to Time system epoch
     setSystemEpoch(getOrCreateSystemEpoch());
 
+    // live clock (user epoch time)
+    const tick = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(tick);
+  }, []);
+
+  // load receipts (primary -> backup)
+  useEffect(() => {
     const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
     if (primary) {
       setReceipts(primary);
@@ -241,13 +281,20 @@ export default function ReceiptDetailPage() {
   if (!loaded) {
     return (
       <main style={wrap}>
-        <div style={frame}>
-          <button onClick={close} style={xTopLeft} aria-label="Close">
-            ×
-          </button>
-          <div style={{ paddingTop: NAV_H, fontSize: 12, opacity: 0.55 }}>
-            Loading…
-          </div>
+        <button onClick={close} style={xFixed} aria-label="Close">
+          ×
+        </button>
+
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 720,
+            paddingTop: NAV_H,
+            fontSize: 12,
+            opacity: 0.55,
+          }}
+        >
+          Loading…
         </div>
       </main>
     );
@@ -256,32 +303,38 @@ export default function ReceiptDetailPage() {
   if (!receipt || !computed) {
     return (
       <main style={wrap}>
-        <div style={frame}>
-          <button onClick={close} style={xTopLeft} aria-label="Close">
-            ×
-          </button>
+        <button onClick={close} style={xFixed} aria-label="Close">
+          ×
+        </button>
 
-          <div style={{ display: "grid", gap: 10, paddingTop: NAV_H }}>
-            <div style={{ fontSize: 16, opacity: 0.9 }}>Receipt not found.</div>
-            <div style={{ fontSize: 12, opacity: 0.55 }}>
-              id:{" "}
-              <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                {id || "(empty)"}
-              </span>
-              {" · "}
-              vault:{" "}
-              <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                {receipts.length}
-              </span>
-            </div>
-
-            <button
-              onClick={() => router.push("/365/receipts")}
-              style={pillButtonStyle}
-            >
-              Back to receipts
-            </button>
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 720,
+            paddingTop: NAV_H,
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <div style={{ fontSize: 16, opacity: 0.9 }}>Receipt not found.</div>
+          <div style={{ fontSize: 12, opacity: 0.55 }}>
+            id:{" "}
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>
+              {id || "(empty)"}
+            </span>
+            {" · "}
+            vault:{" "}
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>
+              {receipts.length}
+            </span>
           </div>
+
+          <button
+            onClick={() => router.push("/365/receipts")}
+            style={pillButtonStyle}
+          >
+            Back to receipts
+          </button>
         </div>
       </main>
     );
@@ -290,15 +343,19 @@ export default function ReceiptDetailPage() {
   const glyph = firstGlyph(receipt.place);
   const colors = avatarColors(receipt.place);
   const merchantName = (receipt.place || "").trim() || "Merchant";
+  const exploreDate = formatExploreDate(receipt.ts);
+
+  const userEpochTime =
+    systemEpoch != null ? formatUserEpochRuntime(now, systemEpoch) : "(unavailable)";
 
   return (
     <main style={wrap}>
-      <div style={frame}>
-        {/* X pinned to true top-left (soft inset) */}
-        <button onClick={close} style={xTopLeft} aria-label="Close">
-          ×
-        </button>
+      {/* X truly pinned to viewport left */}
+      <button onClick={close} style={xFixed} aria-label="Close">
+        ×
+      </button>
 
+      <div style={frame}>
         {/* 1) Hero (no location) */}
         <section style={{ ...section, paddingTop: NAV_H }}>
           <div style={heroStack}>
@@ -325,11 +382,11 @@ export default function ReceiptDetailPage() {
 
           <div style={rows}>
             <Row
-              label="Day cumulative"
+              label="Day cumulative (at this moment)"
               value={formatMoney(computed.dayCum)}
             />
             <Row
-              label="365 rolling total"
+              label="365 rolling total (at this moment)"
               value={formatMoney(computed.total365)}
             />
             <Row
@@ -343,7 +400,7 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* 3) Ledger (no date in time row) */}
+        {/* 3) Ledger */}
         <section style={section}>
           <Title>Ledger</Title>
 
@@ -359,11 +416,7 @@ export default function ReceiptDetailPage() {
               mono
             />
             <Row label="Epoch time (ms)" value={String(receipt.ts)} mono />
-            <Row
-              label="User epoch start (ms)"
-              value={systemEpoch != null ? String(systemEpoch) : "(unavailable)"}
-              mono
-            />
+            <Row label="User epoch time" value={userEpochTime} mono />
             <Row
               label="Latitude / Longitude"
               value={`${LAT_33133}, ${LNG_33133}`}
@@ -375,14 +428,27 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* 4) Institutional Footer (dense; phone under address; link emphasized) */}
-        <section style={{ ...section, paddingBottom: 32 }}>
+        {/* 4) Explore (compact, no row borders) */}
+        <section style={section}>
+          <Title>Explore</Title>
+
+          <div style={menu}>
+            <MenuItem label={`See all your transactions for ${exploreDate}`} />
+            <MenuItem label={`View your ${merchantName} transactions across time`} />
+            <MenuItem label="Learn how the Engine works" />
+          </div>
+        </section>
+
+        <div style={sectionDivider} />
+
+        {/* 5) Institutional Footer (single-line stacked, then space, then URL) */}
+        <section style={footerSection}>
           <div style={footerBrand}>Outflō</div>
           <div style={footerLine}>{FOOTER_STREET}</div>
           <div style={footerLine}>{FOOTER_CITYSTATEZIP}</div>
           <div style={footerLine}>{FOOTER_PHONE}</div>
 
-          <div style={{ height: 16 }} />
+          <div style={{ height: 14 }} />
 
           <Link href="/" style={footerLink}>
             outflo.is
@@ -426,6 +492,15 @@ function Row({
   );
 }
 
+function MenuItem({ label }: { label: string }) {
+  return (
+    <div style={menuItem}>
+      <div style={menuLabel}>{label}</div>
+      <div style={chev}>›</div>
+    </div>
+  );
+}
+
 /* ---------------- styles ---------------- */
 
 const NAV_H = 56;
@@ -446,8 +521,9 @@ const frame: React.CSSProperties = {
   position: "relative",
 };
 
-const xTopLeft: React.CSSProperties = {
-  position: "absolute",
+// KEY: fixed to viewport so it can be truly left
+const xFixed: React.CSSProperties = {
+  position: "fixed",
   top: 12,
   left: 12,
   width: 40,
@@ -460,6 +536,7 @@ const xTopLeft: React.CSSProperties = {
   fontSize: 28,
   opacity: 0.75,
   cursor: "pointer",
+  zIndex: 50,
 };
 
 const section: React.CSSProperties = {
@@ -556,18 +633,50 @@ const rowValue: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-// Footer (dense + pulled together)
+/* Explore (compact, no lines) */
+const menu: React.CSSProperties = {
+  display: "grid",
+  gap: 10,
+};
+
+const menuItem: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "8px 0",
+};
+
+const menuLabel: React.CSSProperties = {
+  fontSize: 16,
+  opacity: 0.92,
+};
+
+const chev: React.CSSProperties = {
+  fontSize: 22,
+  opacity: 0.30,
+  lineHeight: "22px",
+};
+
+/* Footer: single-line stack, then space, then URL */
+const footerSection: React.CSSProperties = {
+  display: "grid",
+  gap: 2, // tight single-line spacing
+  padding: "10px 0 32px",
+};
+
 const footerBrand: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 650,
   opacity: 0.78,
   letterSpacing: "0.02em",
+  marginBottom: 2,
 };
 
 const footerLine: React.CSSProperties = {
   fontSize: 13,
   opacity: 0.42,
-  lineHeight: 1.25,
+  lineHeight: 1.12,
 };
 
 const footerLink: React.CSSProperties = {
