@@ -1,6 +1,7 @@
 // app/365/receipts/[id]/page.tsx
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
@@ -14,7 +15,14 @@ type Receipt = {
 const STORAGE_KEY = "outflo_receipts_v1";
 const BACKUP_KEY = "outflo_receipts_v1_backup";
 
-/* ---------- parsing ---------- */
+const GLOW = "#FFFEFA";
+
+// Miami placeholder (as requested)
+const FAKE_STREET = "314 Outflō Grove";
+const FAKE_CITYSTATEZIP = "Miami, FL 33133";
+const FAKE_PHONE = "+1 (305) 000-0000";
+
+/* ---------------- parsing ---------------- */
 
 function safeParseReceipts(raw: string | null): Receipt[] | null {
   if (!raw) return null;
@@ -37,9 +45,7 @@ function safeParseReceipts(raw: string | null): Receipt[] | null {
   }
 }
 
-/* ---------- formatting ---------- */
-
-const GLOW = "#FFFEFA";
+/* ---------------- formatting ---------------- */
 
 function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
@@ -59,12 +65,24 @@ function formatHumanTimestamp(ts: number) {
   return `${date} · ${time}`;
 }
 
-function formatTime24WithSeconds(ts: number) {
+function formatExploreDate(ts: number) {
   const d = new Date(ts);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatFullTimestamp24(ts: number) {
+  const d = new Date(ts);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
   const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
   const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
 }
 
 function dayKeyLocal(ts: number) {
@@ -98,11 +116,15 @@ function dayCumulativeAtMoment(target: Receipt, receipts: Receipt[]) {
   return target.amount;
 }
 
-/* ---------- avatar (deterministic, matte) ---------- */
+function receiptSuffix(id: string) {
+  const parts = id.split("-");
+  return parts.length > 1 ? parts[1] : id;
+}
+
+/* ---------------- avatar (deterministic, matte) ---------------- */
 
 function firstGlyph(place: string) {
   const s = (place || "").trim();
-  // first alphanumeric char
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
     if (/[A-Za-z0-9]/.test(c)) return c.toUpperCase();
@@ -111,8 +133,7 @@ function firstGlyph(place: string) {
 }
 
 function hashString(s: string) {
-  // small deterministic hash (stable)
-  let h = 2166136261; // FNV-ish seed
+  let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
     h = Math.imul(h, 16777619);
@@ -122,13 +143,13 @@ function hashString(s: string) {
 
 function avatarColors(place: string) {
   const h = hashString(place || "outflo") % 360;
-  // matte, dark, muted
-  const bg = `hsl(${h} 42% 22%)`;
-  const fg = `hsl(${h} 80% 86%)`;
-  return { bg, fg };
+  return {
+    bg: `hsl(${h} 42% 22%)`,
+    fg: `hsl(${h} 80% 86%)`,
+  };
 }
 
-/* ---------- component ---------- */
+/* ---------------- component ---------------- */
 
 export default function ReceiptDetailPage() {
   const router = useRouter();
@@ -171,6 +192,13 @@ export default function ReceiptDetailPage() {
     );
   }, [receipts, id]);
 
+  const userEpochStart = useMemo(() => {
+    if (!receipts.length) return null;
+    let min = receipts[0].ts;
+    for (const r of receipts) if (r.ts < min) min = r.ts;
+    return min;
+  }, [receipts]);
+
   const computed = useMemo(() => {
     if (!receipt) return null;
 
@@ -192,7 +220,6 @@ export default function ReceiptDetailPage() {
       total365,
       dayIndex: idx + 1,
       dayCount: asc.length,
-      // kept for potential future use:
       dayTotal: sumDay(sameDay),
     };
   }, [receipt, receipts]);
@@ -209,12 +236,12 @@ export default function ReceiptDetailPage() {
     return (
       <main style={wrap}>
         <div style={frame}>
-          <div style={navBand}>
-            <button onClick={close} style={xStyle} aria-label="Close">
-              ×
-            </button>
+          <button onClick={close} style={xTopLeft} aria-label="Close">
+            ×
+          </button>
+          <div style={{ paddingTop: NAV_H, fontSize: 12, opacity: 0.55 }}>
+            Loading…
           </div>
-          <div style={{ fontSize: 12, opacity: 0.55 }}>Loading…</div>
         </div>
       </main>
     );
@@ -224,13 +251,11 @@ export default function ReceiptDetailPage() {
     return (
       <main style={wrap}>
         <div style={frame}>
-          <div style={navBand}>
-            <button onClick={close} style={xStyle} aria-label="Close">
-              ×
-            </button>
-          </div>
+          <button onClick={close} style={xTopLeft} aria-label="Close">
+            ×
+          </button>
 
-          <div style={{ display: "grid", gap: 10, paddingTop: 18 }}>
+          <div style={{ display: "grid", gap: 10, paddingTop: NAV_H }}>
             <div style={{ fontSize: 16, opacity: 0.9 }}>Receipt not found.</div>
             <div style={{ fontSize: 12, opacity: 0.55 }}>
               id:{" "}
@@ -258,37 +283,37 @@ export default function ReceiptDetailPage() {
 
   const glyph = firstGlyph(receipt.place);
   const colors = avatarColors(receipt.place);
+  const merchantName = (receipt.place || "").trim() || "Merchant";
+  const exploreDate = formatExploreDate(receipt.ts);
 
   return (
     <main style={wrap}>
       <div style={frame}>
-        {/* NAV BAND (prevents overlap with hero) */}
-        <div style={navBand}>
-          <button onClick={close} style={xStyle} aria-label="Close">
-            ×
-          </button>
-        </div>
+        {/* X pinned to true top-left */}
+        <button onClick={close} style={xTopLeft} aria-label="Close">
+          ×
+        </button>
 
-        {/* 1) Hero (left-aligned spine, Cash App feel) */}
-        <section style={section}>
-          <div style={heroTopRow}>
+        {/* 1) Hero */}
+        <section style={{ ...section, paddingTop: NAV_H }}>
+          <div style={heroStack}>
             <div style={{ ...avatar, background: colors.bg, color: colors.fg }}>
               {glyph}
             </div>
 
-            <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
-              <div style={merchant} title={receipt.place}>
-                {receipt.place}
+            <div style={heroInfo}>
+              <div style={merchant} title={merchantName}>
+                {merchantName}
               </div>
               <div style={metaLine}>Miami, FL</div>
               <div style={metaLine}>{formatHumanTimestamp(receipt.ts)}</div>
             </div>
-          </div>
 
-          <div style={amount}>{formatMoney(receipt.amount)}</div>
+            <div style={amount}>{formatMoney(receipt.amount)}</div>
+          </div>
         </section>
 
-        <div style={divider} />
+        <div style={sectionDivider} />
 
         {/* 2) Position */}
         <section style={section}>
@@ -308,62 +333,72 @@ export default function ReceiptDetailPage() {
               value={`${computed.dayIndex} of ${computed.dayCount}`}
               mono
             />
-            <Row label="Street address" value="(placeholder)" />
-            <Row label="City, State ZIP" value="(placeholder)" />
+            <Row label="Street address" value={FAKE_STREET} />
+            <Row label="City, State ZIP" value={FAKE_CITYSTATEZIP} />
           </div>
         </section>
 
-        <div style={divider} />
+        <div style={sectionDivider} />
 
         {/* 3) Ledger */}
         <section style={section}>
           <Title>Ledger</Title>
 
           <div style={rows}>
-            <Row label="Receipt ID" value={receipt.id} mono />
-            <Row label="Full timestamp (24h + seconds)" value={formatTime24WithSeconds(receipt.ts)} mono />
+            <Row label="Receipt ID" value={`#${receiptSuffix(receipt.id)}`} mono />
+            <Row
+              label="Full timestamp (24h + seconds)"
+              value={formatFullTimestamp24(receipt.ts)}
+              mono
+            />
             <Row label="Epoch time (ms)" value={String(receipt.ts)} mono />
+            <Row
+              label="User epoch start (ms)"
+              value={userEpochStart ? String(userEpochStart) : "(unavailable)"}
+              mono
+            />
             <Row label="Latitude / Longitude" value="(placeholder)" mono />
             <Row label="Payment method" value="(placeholder)" />
           </div>
         </section>
 
-        <div style={divider} />
+        <div style={sectionDivider} />
 
         {/* 4) Explore */}
         <section style={section}>
           <Title>Explore</Title>
 
           <div style={menu}>
-            <MenuItem label="See all your transactions for this day" />
-            <MenuItem label="View this merchant across 365 days" />
-            <MenuItem label="Contact this merchant" />
+            <MenuItem label={`See all your transactions for ${exploreDate}`} />
+            <MenuItem label={`View your ${merchantName} transactions across time`} />
             <MenuItem label="Learn how the Engine works" />
           </div>
         </section>
 
-        <div style={divider} />
+        <div style={sectionDivider} />
 
         {/* 5) Institutional Footer */}
         <section style={{ ...section, paddingBottom: 32 }}>
           <div style={footerBrand}>Outflō</div>
-          <div style={footerLine}>[Address placeholder]</div>
-          <div style={footerLine}>[City, State ZIP]</div>
-          <div style={footerLine}>[Phone placeholder]</div>
+          <div style={footerLine}>{FAKE_STREET}</div>
+          <div style={footerLine}>{FAKE_CITYSTATEZIP}</div>
+          <div style={footerLine}>{FAKE_PHONE}</div>
+
+          <div style={{ height: 16 }} />
+
+          <Link href="/" style={footerLink}>
+            outflo.is
+          </Link>
         </section>
       </div>
     </main>
   );
 }
 
-/* ---------- tiny UI helpers ---------- */
+/* ---------------- helpers ---------------- */
 
 function Title({ children }: { children: string }) {
-  return (
-    <div style={title}>
-      {children}
-    </div>
-  );
+  return <div style={title}>{children}</div>;
 }
 
 function Row({
@@ -381,8 +416,11 @@ function Row({
       <div
         style={{
           ...rowValue,
-          ...(mono ? { fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" } : {}),
+          ...(mono
+            ? { fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }
+            : {}),
         }}
+        title={value}
       >
         {value}
       </div>
@@ -393,13 +431,15 @@ function Row({
 function MenuItem({ label }: { label: string }) {
   return (
     <div style={menuItem}>
-      <div style={{ fontSize: 16, opacity: 0.92 }}>{label}</div>
-      <div style={{ fontSize: 22, opacity: 0.30 }}>›</div>
+      <div style={menuLabel}>{label}</div>
+      <div style={chev}>›</div>
     </div>
   );
 }
 
-/* ---------- styles (no outer box, full screen) ---------- */
+/* ---------------- styles ---------------- */
+
+const NAV_H = 56;
 
 const wrap: React.CSSProperties = {
   minHeight: "100vh",
@@ -417,23 +457,20 @@ const frame: React.CSSProperties = {
   position: "relative",
 };
 
-const navBand: React.CSSProperties = {
-  height: 56,
-  display: "flex",
-  alignItems: "center",
-};
-
-const xStyle: React.CSSProperties = {
+const xTopLeft: React.CSSProperties = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  width: 44,
+  height: 44,
+  lineHeight: "44px",
+  padding: 0,
   background: "transparent",
   border: "none",
   color: "white",
   fontSize: 30,
-  opacity: 0.78,
+  opacity: 0.82,
   cursor: "pointer",
-  padding: 0,
-  width: 44,
-  height: 44,
-  lineHeight: "44px",
 };
 
 const section: React.CSSProperties = {
@@ -442,22 +479,32 @@ const section: React.CSSProperties = {
   padding: "10px 0",
 };
 
-const heroTopRow: React.CSSProperties = {
-  display: "flex",
+const sectionDivider: React.CSSProperties = {
+  height: 1,
+  background: "rgba(255,255,255,0.10)",
+  margin: "14px 0",
+};
+
+const heroStack: React.CSSProperties = {
+  display: "grid",
   gap: 12,
-  alignItems: "center",
 };
 
 const avatar: React.CSSProperties = {
-  width: 44,
-  height: 44,
+  width: 54,
+  height: 54,
   borderRadius: 999,
   display: "grid",
   placeItems: "center",
-  fontSize: 18,
-  fontWeight: 700,
+  fontSize: 20,
+  fontWeight: 750,
   userSelect: "none",
-  flex: "0 0 auto",
+};
+
+const heroInfo: React.CSSProperties = {
+  display: "grid",
+  gap: 4,
+  minWidth: 0,
 };
 
 const merchant: React.CSSProperties = {
@@ -483,19 +530,14 @@ const amount: React.CSSProperties = {
   fontVariantNumeric: "tabular-nums",
   lineHeight: 1,
   color: GLOW,
-};
-
-const divider: React.CSSProperties = {
-  height: 1,
-  background: "rgba(255,255,255,0.10)",
-  margin: "14px 0",
+  marginTop: 4,
 };
 
 const title: React.CSSProperties = {
-  fontSize: 12,
-  opacity: 0.65,
-  letterSpacing: "0.08em",
-  textTransform: "none", // Title case as requested
+  fontSize: 18,
+  fontWeight: 650,
+  letterSpacing: "-0.01em",
+  opacity: 0.92,
 };
 
 const rows: React.CSSProperties = {
@@ -519,7 +561,7 @@ const rowValue: React.CSSProperties = {
   fontSize: 14,
   opacity: 0.92,
   textAlign: "right",
-  maxWidth: "60%",
+  maxWidth: "62%",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -527,6 +569,7 @@ const rowValue: React.CSSProperties = {
 
 const menu: React.CSSProperties = {
   display: "grid",
+  gap: 10, // compact, no lines between items
 };
 
 const menuItem: React.CSSProperties = {
@@ -534,13 +577,24 @@ const menuItem: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "center",
   gap: 12,
-  padding: "12px 0",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  padding: "8px 0",
+};
+
+const menuLabel: React.CSSProperties = {
+  fontSize: 16,
+  opacity: 0.92,
+};
+
+const chev: React.CSSProperties = {
+  fontSize: 22,
+  opacity: 0.30,
+  lineHeight: "22px",
 };
 
 const footerBrand: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.75,
+  fontWeight: 650,
+  opacity: 0.78,
   letterSpacing: "0.02em",
 };
 
@@ -548,6 +602,14 @@ const footerLine: React.CSSProperties = {
   fontSize: 12,
   opacity: 0.40,
   lineHeight: 1.45,
+};
+
+const footerLink: React.CSSProperties = {
+  fontSize: 12,
+  color: GLOW,
+  textDecoration: "underline",
+  textUnderlineOffset: 3,
+  opacity: 0.95,
 };
 
 const pillButtonStyle: React.CSSProperties = {
@@ -559,4 +621,5 @@ const pillButtonStyle: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
+
 
