@@ -8,19 +8,11 @@ type Receipt = {
   id: string;
   place: string;
   amount: number;
-  ts: number; // epoch ms
+  ts: number; // epoch ms (truth)
 };
 
 const STORAGE_KEY = "outflo_receipts_v1";
 const BACKUP_KEY = "outflo_receipts_v1_backup";
-
-// placeholders (fine for now)
-const HERO_CITY_STATE = "Miami, FL";
-const PLACEHOLDER_STREET = "123 Placeholder St";
-const PLACEHOLDER_CITY_STATE_ZIP = "Miami, FL 33101";
-const PLACEHOLDER_LAT = "25.7617";
-const PLACEHOLDER_LNG = "-80.1918";
-const PLACEHOLDER_PAYMENT = "Cash App";
 
 function safeParseReceipts(raw: string | null): Receipt[] | null {
   if (!raw) return null;
@@ -47,33 +39,17 @@ function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-function formatHeroTimestamp(ts: number) {
+function formatHeroWhen(ts: number) {
+  // “Today at 4:09 PM” style (simple for now)
   const d = new Date(ts);
-  const date = d.toLocaleDateString("en-GB", {
-    day: "2-digit",
+  const date = d.toLocaleDateString("en-US", {
     month: "short",
+    day: "numeric",
     year: "numeric",
   });
-  const time = d.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
+  const time = d.toLocaleTimeString("en-US", {
+    hour: "numeric",
     minute: "2-digit",
-    hour12: false,
-  });
-  return `${date} · ${time}`;
-}
-
-function formatFullTimestamp(ts: number) {
-  const d = new Date(ts);
-  const date = d.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-  const time = d.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
   });
   return `${date} · ${time}`;
 }
@@ -86,30 +62,32 @@ function dayKeyLocal(ts: number) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function monogram(place: string) {
-  const s = (place || "").trim();
-  if (!s) return "?";
-  const parts = s.split(/\s+/).filter(Boolean);
-  const first = parts[0]?.[0] ?? "?";
-  const second = parts.length > 1 ? parts[1][0] : "";
-  const raw = (first + second).toUpperCase();
-
-  // If starts with a digit (e.g., "7-11"), keep just the digit.
-  if (/\d/.test(first)) return first;
-  return raw.slice(0, 2);
-}
-
-function sum365At(receipts: Receipt[], atTs: number) {
-  const windowMs = 365 * 24 * 60 * 60 * 1000;
-  const start = atTs - windowMs;
+function sumDay(items: Receipt[]) {
   let s = 0;
-  for (const r of receipts) {
-    if (r.ts >= start && r.ts <= atTs) s += r.amount;
-  }
+  for (const r of items) s += r.amount;
   return s;
 }
 
-export default function ReceiptDetailOverlay({
+function dayCumulativeAtMoment(target: Receipt, receipts: Receipt[]) {
+  const k = dayKeyLocal(target.ts);
+  const sameDay = receipts.filter((r) => dayKeyLocal(r.ts) === k);
+
+  // chronological asc so we can compute cumulative at target moment
+  const asc = [...sameDay].sort((a, b) => {
+    if (a.ts !== b.ts) return a.ts - b.ts;
+    return a.id.localeCompare(b.id);
+  });
+
+  let s = 0;
+  for (const r of asc) {
+    s += r.amount;
+    if (r.id === target.id) return s;
+  }
+  // fallback
+  return target.amount;
+}
+
+export default function ReceiptDetailPage({
   params,
 }: {
   params: { id: string };
@@ -117,14 +95,14 @@ export default function ReceiptDetailOverlay({
   const router = useRouter();
   const id = params.id;
 
+  const [loaded, setLoaded] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
     if (primary) {
       setReceipts(primary);
-      setLoading(false);
+      setLoaded(true);
       return;
     }
 
@@ -134,300 +112,307 @@ export default function ReceiptDetailOverlay({
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(backup));
       } catch {}
+      setLoaded(true);
+      return;
     }
-    setLoading(false);
+
+    setReceipts([]);
+    setLoaded(true);
   }, []);
 
-  const receipt = useMemo(() => receipts.find((r) => r.id === id) ?? null, [
-    receipts,
-    id,
-  ]);
+  const receipt = useMemo(() => {
+    return receipts.find((r) => r.id === id) ?? null;
+  }, [receipts, id]);
 
-  const position = useMemo(() => {
+  const engine = useMemo(() => {
     if (!receipt) return null;
 
-    const key = dayKeyLocal(receipt.ts);
-    const sameDay = receipts.filter((r) => dayKeyLocal(r.ts) === key);
+    const dayKey = dayKeyLocal(receipt.ts);
+    const sameDay = receipts.filter((r) => dayKeyLocal(r.ts) === dayKey);
 
+    const dayTotal = sumDay(sameDay);
+    const dayCum = dayCumulativeAtMoment(receipt, receipts);
+
+    const total365 = receipts.reduce((s, r) => s + r.amount, 0);
+
+    // index in day (chronological)
     const asc = [...sameDay].sort((a, b) => {
       if (a.ts !== b.ts) return a.ts - b.ts;
       return a.id.localeCompare(b.id);
     });
+    const idx = Math.max(
+      0,
+      asc.findIndex((r) => r.id === receipt.id)
+    );
 
-    let dayCum = 0;
-    let idx = -1;
-    for (let i = 0; i < asc.length; i++) {
-      dayCum += asc[i].amount;
-      if (asc[i].id === receipt.id) idx = i;
-    }
-
-    const indexInDay = idx >= 0 ? idx + 1 : 1;
-    const countInDay = asc.length || 1;
-
-    const total365 = sum365At(receipts, receipt.ts);
-
-    return { dayCum, total365, indexInDay, countInDay };
-  }, [receipts, receipt]);
+    return {
+      dayCum,
+      dayTotal,
+      total365,
+      dayIndex: idx + 1,
+      dayCount: asc.length,
+    };
+  }, [receipt, receipts]);
 
   function close() {
-    // feel like a layer: close goes "back"
-    // fallback for deep links / no history
+    // overlay close like CashApp
+    // if there is no history, go back to list
     try {
-      if (window.history.length <= 1) {
-        router.push("/365/receipts");
-        return;
-      }
-    } catch {}
-    router.back();
+      router.back();
+    } catch {
+      router.push("/365/receipts");
+    }
   }
 
-  return (
-    <main
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "black",
-        color: "white",
-        zIndex: 50,
-        display: "grid",
-        placeItems: "center",
-        padding: "max(24px, 5vh) 18px",
-        animation: "outfloSlideUp 180ms ease-out both",
-        overflowY: "auto",
-      }}
-    >
-      <style jsx>{`
-        @keyframes outfloSlideUp {
-          from {
-            transform: translateY(22px);
-            opacity: 0.0;
-          }
-          to {
-            transform: translateY(0px);
-            opacity: 1;
-          }
-        }
-      `}</style>
+  // LOADING GATE (prevents false “not found”)
+  if (!loaded) {
+    return (
+      <main style={overlayWrap}>
+        <div style={sheetStyle}>
+          <button onClick={close} style={xStyle} aria-label="Close">
+            ×
+          </button>
+          <div style={{ fontSize: 12, opacity: 0.55 }}>Loading…</div>
+        </div>
+      </main>
+    );
+  }
 
-      <section style={{ width: "min(760px, 94vw)", display: "grid", gap: 16 }}>
-        {/* top bar */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            gap: 12,
-          }}
-        >
-          <button
-            onClick={close}
-            aria-label="Close"
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "white",
-              opacity: 0.8,
-              fontSize: 18,
-              cursor: "pointer",
-              padding: 0,
-              lineHeight: 1,
-            }}
-          >
+  // NOT FOUND (only after loaded)
+  if (!receipt) {
+    return (
+      <main style={overlayWrap}>
+        <div style={sheetStyle}>
+          <button onClick={close} style={xStyle} aria-label="Close">
             ×
           </button>
 
-          <div style={{ fontSize: 12, opacity: 0.35 }} />
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ fontSize: 16, opacity: 0.9 }}>Receipt not found.</div>
+            <div style={{ fontSize: 12, opacity: 0.55 }}>
+              id: <span style={{ fontVariantNumeric: "tabular-nums" }}>{id}</span>
+              {" · "}
+              vault:{" "}
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                {receipts.length}
+              </span>
+            </div>
+
+            <button
+              onClick={() => router.push("/365/receipts")}
+              style={pillButtonStyle}
+            >
+              Back to receipts
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // CASHAPP-ISH HERO STACK (simple + locked)
+  return (
+    <main style={overlayWrap}>
+      <div style={sheetStyle}>
+        <button onClick={close} style={xStyle} aria-label="Close">
+          ×
+        </button>
+
+        {/* HERO */}
+        <div style={{ display: "grid", gap: 10, paddingTop: 8 }}>
+          <div
+            style={{
+              width: 54,
+              height: 54,
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.10)",
+              border: "1px solid rgba(255,255,255,0.14)",
+            }}
+          />
+
+          <div style={{ display: "grid", gap: 4 }}>
+            <div style={{ fontSize: 34, fontWeight: 650, letterSpacing: "-0.02em" }}>
+              {receipt.place}
+            </div>
+
+            <div style={{ fontSize: 14, opacity: 0.55 }}>
+              {/* placeholder location for now */}
+              {formatHeroWhen(receipt.ts)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              fontSize: 56,
+              fontWeight: 700,
+              letterSpacing: "-0.03em",
+              opacity: 0.65,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {formatMoney(receipt.amount)}
+          </div>
         </div>
 
-        {/* content */}
-        {loading ? (
-          <div style={{ fontSize: 12, opacity: 0.4 }}>Loading…</div>
-        ) : !receipt || !position ? (
-          <div style={{ fontSize: 12, opacity: 0.5 }}>
-            Receipt not found.
-          </div>
-        ) : (
-          <>
-            {/* HERO */}
-            <div style={{ display: "grid", gap: 10 }}>
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  display: "grid",
-                  placeItems: "center",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  letterSpacing: "0.04em",
-                  userSelect: "none",
-                }}
-                title="Merchant"
-              >
-                {monogram(receipt.place)}
-              </div>
+        <div style={divider} />
 
-              <div style={{ fontSize: 18, fontWeight: 650, opacity: 0.95 }}>
-                {receipt.place}
-              </div>
+        {/* ENGINE / CONTEXT */}
+        <div style={block}>
+          <Row label="Day cumulative (at this moment)" value={formatMoney(engine!.dayCum)} />
+          <Row label="365 rolling total" value={formatMoney(engine!.total365)} />
+        </div>
 
-              <div style={{ fontSize: 12, opacity: 0.55 }}>
-                {HERO_CITY_STATE}
-              </div>
+        <div style={divider} />
 
-              <div style={{ fontSize: 12, opacity: 0.6 }}>
-                {formatHeroTimestamp(receipt.ts)}
-              </div>
+        {/* LEDGER */}
+        <div style={block}>
+          <Row label="Receipt ID" value={`#${receipt.id}`} mono />
+          <Row label="Epoch (ms)" value={String(receipt.ts)} mono />
+          <Row
+            label="Index in day"
+            value={`${engine!.dayIndex} of ${engine!.dayCount}`}
+            mono
+          />
+        </div>
 
-              <div
-                style={{
-                  fontSize: 40,
-                  fontWeight: 800,
-                  letterSpacing: "-0.03em",
-                  fontVariantNumeric: "tabular-nums",
-                  marginTop: 2,
-                }}
-              >
-                {formatMoney(receipt.amount)}
-              </div>
-            </div>
+        <div style={divider} />
 
-            <Divider />
+        {/* EXPLORE / ACTIONS (placeholders for now) */}
+        <div style={{ display: "grid", gap: 14 }}>
+          <div style={{ fontSize: 22, fontWeight: 650 }}>Explore</div>
 
-            {/* POSITION */}
-            <SectionTitle title="Position" />
+          <Action label={`View all transactions from ${receipt.place}`} />
+          <Action label="View full breakdown for this day" />
+          <Action label={`See ${receipt.place} across 365 days`} />
+          <Action label="Learn how the Engine works" />
+          <Action label="View location details" />
+        </div>
 
-            <KeyValueRow
-              k="Day cumulative"
-              v={formatMoney(position.dayCum)}
-            />
-            <KeyValueRow
-              k="365 rolling total"
-              v={formatMoney(position.total365)}
-            />
-            <KeyValueRow
-              k="Index in day"
-              v={`${position.indexInDay} of ${position.countInDay}`}
-            />
-            <KeyValueRow k="Street" v={PLACEHOLDER_STREET} />
-            <KeyValueRow k="City" v={PLACEHOLDER_CITY_STATE_ZIP} />
+        <div style={divider} />
 
-            <Divider />
+        {/* CONTACT / FOOTER PLACEHOLDER */}
+        <div style={{ fontSize: 13, opacity: 0.55, lineHeight: 1.45 }}>
+          Outflō (placeholder)
+          <br />
+          Contact: (placeholder)
+          <br />
+          Support: (placeholder)
+        </div>
 
-            {/* LEDGER */}
-            <SectionTitle title="Ledger" />
-
-            <KeyValueRow k="Receipt ID" v={receipt.id} />
-            <KeyValueRow k="Timestamp" v={formatFullTimestamp(receipt.ts)} />
-            <KeyValueRow k="Epoch (ms)" v={String(receipt.ts)} />
-            <KeyValueRow k="Lat / Long" v={`${PLACEHOLDER_LAT}, ${PLACEHOLDER_LNG}`} />
-            <KeyValueRow k="Payment method" v={PLACEHOLDER_PAYMENT} />
-
-            <Divider />
-
-            {/* EXPLORE */}
-            <SectionTitle title="Explore" />
-
-            <MenuItem label="See all your transactions for this day" onClick={() => alert("TBD")} />
-            <MenuItem label="View this merchant across 365 days" onClick={() => alert("TBD")} />
-            <MenuItem label="Contact this merchant" onClick={() => alert("TBD")} />
-            <MenuItem label="Learn how the Engine works" onClick={() => alert("TBD")} />
-
-            <div style={{ height: 6 }} />
-
-            {/* Institutional footer */}
-            <div style={{ fontSize: 11, opacity: 0.22, lineHeight: 1.45 }}>
-              Outflō
-              <br />
-              100 Outflō Way
-              <br />
-              Miami, FL 33101
-              <br />
-              (000) 000-0000
-            </div>
-          </>
-        )}
-      </section>
+        <div style={{ height: 18 }} />
+      </div>
     </main>
   );
 }
 
-function Divider() {
-  return (
-    <div
-      style={{
-        height: 1,
-        background: "rgba(255,255,255,0.10)",
-        width: "100%",
-      }}
-    />
-  );
-}
+/* --- tiny UI helpers --- */
 
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <div
-      style={{
-        fontSize: 12,
-        opacity: 0.65,
-        letterSpacing: "0.06em",
-        textTransform: "uppercase",
-        marginTop: 2,
-      }}
-    >
-      {title}
-    </div>
-  );
-}
-
-function KeyValueRow({ k, v }: { k: string; v: string }) {
+function Row({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div
       style={{
         display: "flex",
         justifyContent: "space-between",
-        gap: 14,
+        gap: 16,
         alignItems: "baseline",
-        padding: "10px 0",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
       }}
     >
-      <div style={{ fontSize: 13, opacity: 0.75 }}>{k}</div>
+      <div style={{ fontSize: 14, opacity: 0.55 }}>{label}</div>
       <div
         style={{
-          fontSize: 13,
+          fontSize: 14,
           opacity: 0.9,
           textAlign: "right",
           fontVariantNumeric: "tabular-nums",
-          wordBreak: "break-word",
+          ...(mono ? { letterSpacing: "0.02em" } : {}),
         }}
       >
-        {v}
+        {value}
       </div>
     </div>
   );
 }
 
-function MenuItem({ label, onClick }: { label: string; onClick: () => void }) {
+function Action({ label }: { label: string }) {
   return (
-    <button
-      onClick={onClick}
+    <div
       style={{
-        width: "100%",
-        background: "transparent",
-        border: "none",
-        color: "white",
-        padding: "12px 0",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        cursor: "pointer",
+        gap: 12,
+        padding: "10px 0",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
       }}
     >
-      <span style={{ fontSize: 14, opacity: 0.92 }}>{label}</span>
-      <span style={{ fontSize: 18, opacity: 0.35, lineHeight: 1 }}>›</span>
-    </button>
+      <div style={{ fontSize: 16, opacity: 0.9 }}>{label}</div>
+      <div style={{ fontSize: 22, opacity: 0.35 }}>›</div>
+    </div>
   );
 }
+
+const overlayWrap: React.CSSProperties = {
+  minHeight: "100vh",
+  background: "rgba(0,0,0,0.92)",
+  color: "white",
+  display: "grid",
+  placeItems: "start center",
+  padding: "max(24px, 6vh) 24px",
+};
+
+const sheetStyle: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 760,
+  marginInline: "auto",
+  boxSizing: "border-box",
+  position: "relative",
+  borderRadius: 22,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(0,0,0,0.70)",
+  padding: "18px 18px 22px",
+};
+
+const xStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 10,
+  left: 10,
+  width: 44,
+  height: 44,
+  borderRadius: 999,
+  background: "transparent",
+  border: "none",
+  color: "white",
+  fontSize: 34,
+  opacity: 0.8,
+  cursor: "pointer",
+  lineHeight: "44px",
+};
+
+const divider: React.CSSProperties = {
+  height: 1,
+  background: "rgba(255,255,255,0.10)",
+  margin: "18px 0",
+};
+
+const block: React.CSSProperties = {
+  display: "grid",
+  gap: 12,
+};
+
+const pillButtonStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.10)",
+  border: "1px solid rgba(255,255,255,0.14)",
+  color: "white",
+  borderRadius: 999,
+  padding: "10px 12px",
+  fontSize: 12,
+  cursor: "pointer",
+};
