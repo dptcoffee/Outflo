@@ -15,12 +15,19 @@ type Receipt = {
 const STORAGE_KEY = "outflo_receipts_v1";
 const BACKUP_KEY = "outflo_receipts_v1_backup";
 
+// Time system epoch (single source of truth)
+const SYSTEM_EPOCH_KEY = "outflo_system_epoch_v1";
+
 const GLOW = "#FFFEFA";
 
-// Miami placeholder (as requested)
-const FAKE_STREET = "314 Outflō Grove";
-const FAKE_CITYSTATEZIP = "Miami, FL 33133";
-const FAKE_PHONE = "+1 (305) 000-0000";
+// Institutional footer (dense)
+const FOOTER_STREET = "314 Outflō Grove";
+const FOOTER_CITYSTATEZIP = "Miami, FL 33133";
+const FOOTER_PHONE = "+1 (305) 000-0000";
+
+// 33133 (Coconut Grove) neighborhood pin
+const LAT_33133 = "25.7280";
+const LNG_33133 = "-80.2374";
 
 /* ---------------- parsing ---------------- */
 
@@ -45,13 +52,27 @@ function safeParseReceipts(raw: string | null): Receipt[] | null {
   }
 }
 
-/* ---------------- formatting ---------------- */
+/* ---------------- time/formatting ---------------- */
+
+function getOrCreateSystemEpoch(): number {
+  try {
+    const raw = localStorage.getItem(SYSTEM_EPOCH_KEY);
+    const n = raw ? Number(raw) : NaN;
+    if (Number.isFinite(n) && n > 0) return n;
+
+    const now = Date.now();
+    localStorage.setItem(SYSTEM_EPOCH_KEY, String(now));
+    return now;
+  } catch {
+    return Date.now();
+  }
+}
 
 function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-function formatHumanTimestamp(ts: number) {
+function formatHeroDateTime(ts: number) {
   const d = new Date(ts);
   const date = d.toLocaleDateString("en-US", {
     month: "short",
@@ -65,24 +86,13 @@ function formatHumanTimestamp(ts: number) {
   return `${date} · ${time}`;
 }
 
-function formatExploreDate(ts: number) {
+// Ledger: time only (24h + seconds), no date
+function formatTime24WithSeconds(ts: number) {
   const d = new Date(ts);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatFullTimestamp24(ts: number) {
-  const d = new Date(ts);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
   const hh = String(d.getHours()).padStart(2, "0");
   const mi = String(d.getMinutes()).padStart(2, "0");
   const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+  return `${hh}:${mi}:${ss}`;
 }
 
 function dayKeyLocal(ts: number) {
@@ -154,14 +164,17 @@ function avatarColors(place: string) {
 export default function ReceiptDetailPage() {
   const router = useRouter();
   const params = useParams();
-
   const raw = params?.id;
   const id = Array.isArray(raw) ? raw[0] : (raw ?? "");
 
   const [loaded, setLoaded] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [systemEpoch, setSystemEpoch] = useState<number | null>(null);
 
   useEffect(() => {
+    // connect to Time system epoch
+    setSystemEpoch(getOrCreateSystemEpoch());
+
     const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
     if (primary) {
       setReceipts(primary);
@@ -191,13 +204,6 @@ export default function ReceiptDetailPage() {
       null
     );
   }, [receipts, id]);
-
-  const userEpochStart = useMemo(() => {
-    if (!receipts.length) return null;
-    let min = receipts[0].ts;
-    for (const r of receipts) if (r.ts < min) min = r.ts;
-    return min;
-  }, [receipts]);
 
   const computed = useMemo(() => {
     if (!receipt) return null;
@@ -284,17 +290,16 @@ export default function ReceiptDetailPage() {
   const glyph = firstGlyph(receipt.place);
   const colors = avatarColors(receipt.place);
   const merchantName = (receipt.place || "").trim() || "Merchant";
-  const exploreDate = formatExploreDate(receipt.ts);
 
   return (
     <main style={wrap}>
       <div style={frame}>
-        {/* X pinned to true top-left */}
+        {/* X pinned to true top-left (soft inset) */}
         <button onClick={close} style={xTopLeft} aria-label="Close">
           ×
         </button>
 
-        {/* 1) Hero */}
+        {/* 1) Hero (no location) */}
         <section style={{ ...section, paddingTop: NAV_H }}>
           <div style={heroStack}>
             <div style={{ ...avatar, background: colors.bg, color: colors.fg }}>
@@ -305,8 +310,7 @@ export default function ReceiptDetailPage() {
               <div style={merchant} title={merchantName}>
                 {merchantName}
               </div>
-              <div style={metaLine}>Miami, FL</div>
-              <div style={metaLine}>{formatHumanTimestamp(receipt.ts)}</div>
+              <div style={metaLine}>{formatHeroDateTime(receipt.ts)}</div>
             </div>
 
             <div style={amount}>{formatMoney(receipt.amount)}</div>
@@ -315,17 +319,17 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* 2) Position */}
+        {/* 2) Position (city/state only; no street/zip) */}
         <section style={section}>
           <Title>Position</Title>
 
           <div style={rows}>
             <Row
-              label="Day cumulative (at this moment)"
+              label="Day cumulative"
               value={formatMoney(computed.dayCum)}
             />
             <Row
-              label="365 rolling total (at this moment)"
+              label="365 rolling total"
               value={formatMoney(computed.total365)}
             />
             <Row
@@ -333,56 +337,50 @@ export default function ReceiptDetailPage() {
               value={`${computed.dayIndex} of ${computed.dayCount}`}
               mono
             />
-            <Row label="Street address" value={FAKE_STREET} />
-            <Row label="City, State ZIP" value={FAKE_CITYSTATEZIP} />
+            <Row label="City, State" value="Miami, FL" />
           </div>
         </section>
 
         <div style={sectionDivider} />
 
-        {/* 3) Ledger */}
+        {/* 3) Ledger (no date in time row) */}
         <section style={section}>
           <Title>Ledger</Title>
 
           <div style={rows}>
-            <Row label="Receipt ID" value={`#${receiptSuffix(receipt.id)}`} mono />
             <Row
-              label="Full timestamp (24h + seconds)"
-              value={formatFullTimestamp24(receipt.ts)}
+              label="Receipt ID"
+              value={`#${receiptSuffix(receipt.id)}`}
+              mono
+            />
+            <Row
+              label="Time (24h + seconds)"
+              value={formatTime24WithSeconds(receipt.ts)}
               mono
             />
             <Row label="Epoch time (ms)" value={String(receipt.ts)} mono />
             <Row
               label="User epoch start (ms)"
-              value={userEpochStart ? String(userEpochStart) : "(unavailable)"}
+              value={systemEpoch != null ? String(systemEpoch) : "(unavailable)"}
               mono
             />
-            <Row label="Latitude / Longitude" value="(placeholder)" mono />
+            <Row
+              label="Latitude / Longitude"
+              value={`${LAT_33133}, ${LNG_33133}`}
+              mono
+            />
             <Row label="Payment method" value="(placeholder)" />
           </div>
         </section>
 
         <div style={sectionDivider} />
 
-        {/* 4) Explore */}
-        <section style={section}>
-          <Title>Explore</Title>
-
-          <div style={menu}>
-            <MenuItem label={`See all your transactions for ${exploreDate}`} />
-            <MenuItem label={`View your ${merchantName} transactions across time`} />
-            <MenuItem label="Learn how the Engine works" />
-          </div>
-        </section>
-
-        <div style={sectionDivider} />
-
-        {/* 5) Institutional Footer */}
+        {/* 4) Institutional Footer (dense; phone under address; link emphasized) */}
         <section style={{ ...section, paddingBottom: 32 }}>
           <div style={footerBrand}>Outflō</div>
-          <div style={footerLine}>{FAKE_STREET}</div>
-          <div style={footerLine}>{FAKE_CITYSTATEZIP}</div>
-          <div style={footerLine}>{FAKE_PHONE}</div>
+          <div style={footerLine}>{FOOTER_STREET}</div>
+          <div style={footerLine}>{FOOTER_CITYSTATEZIP}</div>
+          <div style={footerLine}>{FOOTER_PHONE}</div>
 
           <div style={{ height: 16 }} />
 
@@ -428,15 +426,6 @@ function Row({
   );
 }
 
-function MenuItem({ label }: { label: string }) {
-  return (
-    <div style={menuItem}>
-      <div style={menuLabel}>{label}</div>
-      <div style={chev}>›</div>
-    </div>
-  );
-}
-
 /* ---------------- styles ---------------- */
 
 const NAV_H = 56;
@@ -459,17 +448,17 @@ const frame: React.CSSProperties = {
 
 const xTopLeft: React.CSSProperties = {
   position: "absolute",
-  top: 0,
-  left: 0,
-  width: 44,
-  height: 44,
-  lineHeight: "44px",
+  top: 12,
+  left: 12,
+  width: 40,
+  height: 40,
+  lineHeight: "40px",
   padding: 0,
   background: "transparent",
   border: "none",
   color: "white",
-  fontSize: 30,
-  opacity: 0.82,
+  fontSize: 28,
+  opacity: 0.75,
   cursor: "pointer",
 };
 
@@ -503,7 +492,7 @@ const avatar: React.CSSProperties = {
 
 const heroInfo: React.CSSProperties = {
   display: "grid",
-  gap: 4,
+  gap: 6,
   minWidth: 0,
 };
 
@@ -567,30 +556,7 @@ const rowValue: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const menu: React.CSSProperties = {
-  display: "grid",
-  gap: 10, // compact, no lines between items
-};
-
-const menuItem: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  padding: "8px 0",
-};
-
-const menuLabel: React.CSSProperties = {
-  fontSize: 16,
-  opacity: 0.92,
-};
-
-const chev: React.CSSProperties = {
-  fontSize: 22,
-  opacity: 0.30,
-  lineHeight: "22px",
-};
-
+// Footer (dense + pulled together)
 const footerBrand: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 650,
@@ -599,9 +565,9 @@ const footerBrand: React.CSSProperties = {
 };
 
 const footerLine: React.CSSProperties = {
-  fontSize: 12,
-  opacity: 0.40,
-  lineHeight: 1.45,
+  fontSize: 13,
+  opacity: 0.42,
+  lineHeight: 1.25,
 };
 
 const footerLink: React.CSSProperties = {
