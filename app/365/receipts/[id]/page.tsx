@@ -524,17 +524,17 @@ const frame: React.CSSProperties = {
 // KEY: fixed to viewport so it can be truly left
 const xFixed: React.CSSProperties = {
   position: "fixed",
-  top: 12,
-  left: 12,
+  top: 8,
+  left: 6,
   width: 40,
   height: 40,
   lineHeight: "40px",
   padding: 0,
-  background: "transparent",
+  background: "rgba(0,0,0,0.9)", // ← black anchor
   border: "none",
   color: "white",
   fontSize: 28,
-  opacity: 0.75,
+  opacity: 1,
   cursor: "pointer",
   zIndex: 50,
 };
