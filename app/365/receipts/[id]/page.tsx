@@ -14,6 +14,8 @@ type Receipt = {
 const STORAGE_KEY = "outflo_receipts_v1";
 const BACKUP_KEY = "outflo_receipts_v1_backup";
 
+/* ---------- parsing ---------- */
+
 function safeParseReceipts(raw: string | null): Receipt[] | null {
   if (!raw) return null;
   try {
@@ -35,11 +37,15 @@ function safeParseReceipts(raw: string | null): Receipt[] | null {
   }
 }
 
+/* ---------- formatting ---------- */
+
+const GLOW = "#FFFEFA";
+
 function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-function formatHeroWhen(ts: number) {
+function formatHumanTimestamp(ts: number) {
   const d = new Date(ts);
   const date = d.toLocaleDateString("en-US", {
     month: "short",
@@ -51,6 +57,14 @@ function formatHeroWhen(ts: number) {
     minute: "2-digit",
   });
   return `${date} · ${time}`;
+}
+
+function formatTime24WithSeconds(ts: number) {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
 }
 
 function dayKeyLocal(ts: number) {
@@ -84,11 +98,42 @@ function dayCumulativeAtMoment(target: Receipt, receipts: Receipt[]) {
   return target.amount;
 }
 
+/* ---------- avatar (deterministic, matte) ---------- */
+
+function firstGlyph(place: string) {
+  const s = (place || "").trim();
+  // first alphanumeric char
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (/[A-Za-z0-9]/.test(c)) return c.toUpperCase();
+  }
+  return "?";
+}
+
+function hashString(s: string) {
+  // small deterministic hash (stable)
+  let h = 2166136261; // FNV-ish seed
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function avatarColors(place: string) {
+  const h = hashString(place || "outflo") % 360;
+  // matte, dark, muted
+  const bg = `hsl(${h} 42% 22%)`;
+  const fg = `hsl(${h} 80% 86%)`;
+  return { bg, fg };
+}
+
+/* ---------- component ---------- */
+
 export default function ReceiptDetailPage() {
   const router = useRouter();
   const params = useParams();
 
-  // IMPORTANT: client-safe param extraction (fixes mobile Safari / prod weirdness)
   const raw = params?.id;
   const id = Array.isArray(raw) ? raw[0] : (raw ?? "");
 
@@ -119,25 +164,20 @@ export default function ReceiptDetailPage() {
 
   const receipt = useMemo(() => {
     if (!id) return null;
-
-    // Router often gives decoded values already; this covers both.
-    const r =
+    return (
       receipts.find((x) => x.id === id) ??
       receipts.find((x) => x.id === decodeURIComponent(id)) ??
-      null;
-
-    return r;
+      null
+    );
   }, [receipts, id]);
 
-  const engine = useMemo(() => {
+  const computed = useMemo(() => {
     if (!receipt) return null;
 
     const dayKey = dayKeyLocal(receipt.ts);
     const sameDay = receipts.filter((r) => dayKeyLocal(r.ts) === dayKey);
 
-    const dayTotal = sumDay(sameDay);
     const dayCum = dayCumulativeAtMoment(receipt, receipts);
-
     const total365 = receipts.reduce((s, r) => s + r.amount, 0);
 
     const asc = [...sameDay].sort((a, b) => {
@@ -149,10 +189,11 @@ export default function ReceiptDetailPage() {
 
     return {
       dayCum,
-      dayTotal,
       total365,
       dayIndex: idx + 1,
       dayCount: asc.length,
+      // kept for potential future use:
+      dayTotal: sumDay(sameDay),
     };
   }, [receipt, receipts]);
 
@@ -164,32 +205,33 @@ export default function ReceiptDetailPage() {
     }
   }
 
-  // LOADING GATE
   if (!loaded) {
     return (
-      <main style={overlayWrap}>
-        <div style={sheetStyle}>
-          <button onClick={close} style={xStyle} aria-label="Close">
-            ×
-          </button>
+      <main style={wrap}>
+        <div style={frame}>
+          <div style={navBand}>
+            <button onClick={close} style={xStyle} aria-label="Close">
+              ×
+            </button>
+          </div>
           <div style={{ fontSize: 12, opacity: 0.55 }}>Loading…</div>
         </div>
       </main>
     );
   }
 
-  // NOT FOUND (only after loaded)
-  if (!receipt) {
+  if (!receipt || !computed) {
     return (
-      <main style={overlayWrap}>
-        <div style={sheetStyle}>
-          <button onClick={close} style={xStyle} aria-label="Close">
-            ×
-          </button>
+      <main style={wrap}>
+        <div style={frame}>
+          <div style={navBand}>
+            <button onClick={close} style={xStyle} aria-label="Close">
+              ×
+            </button>
+          </div>
 
-          <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gap: 10, paddingTop: 18 }}>
             <div style={{ fontSize: 16, opacity: 0.9 }}>Receipt not found.</div>
-
             <div style={{ fontSize: 12, opacity: 0.55 }}>
               id:{" "}
               <span style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -214,105 +256,115 @@ export default function ReceiptDetailPage() {
     );
   }
 
+  const glyph = firstGlyph(receipt.place);
+  const colors = avatarColors(receipt.place);
+
   return (
-    <main style={overlayWrap}>
-      <div style={sheetStyle}>
-        <button onClick={close} style={xStyle} aria-label="Close">
-          ×
-        </button>
+    <main style={wrap}>
+      <div style={frame}>
+        {/* NAV BAND (prevents overlap with hero) */}
+        <div style={navBand}>
+          <button onClick={close} style={xStyle} aria-label="Close">
+            ×
+          </button>
+        </div>
 
-        {/* HERO */}
-        <div style={{ display: "grid", gap: 10, paddingTop: 8 }}>
-          <div
-            style={{
-              width: 54,
-              height: 54,
-              borderRadius: 999,
-              background: "rgba(255,255,255,0.10)",
-              border: "1px solid rgba(255,255,255,0.14)",
-            }}
-          />
-
-          <div style={{ display: "grid", gap: 4 }}>
-            <div
-              style={{ fontSize: 34, fontWeight: 650, letterSpacing: "-0.02em" }}
-            >
-              {receipt.place}
+        {/* 1) Hero (left-aligned spine, Cash App feel) */}
+        <section style={section}>
+          <div style={heroTopRow}>
+            <div style={{ ...avatar, background: colors.bg, color: colors.fg }}>
+              {glyph}
             </div>
 
-            <div style={{ fontSize: 14, opacity: 0.55 }}>
-              {formatHeroWhen(receipt.ts)}
+            <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+              <div style={merchant} title={receipt.place}>
+                {receipt.place}
+              </div>
+              <div style={metaLine}>Miami, FL</div>
+              <div style={metaLine}>{formatHumanTimestamp(receipt.ts)}</div>
             </div>
           </div>
 
-          <div
-            style={{
-              fontSize: 56,
-              fontWeight: 700,
-              letterSpacing: "-0.03em",
-              opacity: 0.65,
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {formatMoney(receipt.amount)}
+          <div style={amount}>{formatMoney(receipt.amount)}</div>
+        </section>
+
+        <div style={divider} />
+
+        {/* 2) Position */}
+        <section style={section}>
+          <Title>Position</Title>
+
+          <div style={rows}>
+            <Row
+              label="Day cumulative (at this moment)"
+              value={formatMoney(computed.dayCum)}
+            />
+            <Row
+              label="365 rolling total (at this moment)"
+              value={formatMoney(computed.total365)}
+            />
+            <Row
+              label="Index in day"
+              value={`${computed.dayIndex} of ${computed.dayCount}`}
+              mono
+            />
+            <Row label="Street address" value="(placeholder)" />
+            <Row label="City, State ZIP" value="(placeholder)" />
           </div>
-        </div>
+        </section>
 
         <div style={divider} />
 
-        {/* ENGINE / CONTEXT */}
-        <div style={block}>
-          <Row
-            label="Day cumulative (at this moment)"
-            value={formatMoney(engine!.dayCum)}
-          />
-          <Row label="365 rolling total" value={formatMoney(engine!.total365)} />
-        </div>
+        {/* 3) Ledger */}
+        <section style={section}>
+          <Title>Ledger</Title>
+
+          <div style={rows}>
+            <Row label="Receipt ID" value={receipt.id} mono />
+            <Row label="Full timestamp (24h + seconds)" value={formatTime24WithSeconds(receipt.ts)} mono />
+            <Row label="Epoch time (ms)" value={String(receipt.ts)} mono />
+            <Row label="Latitude / Longitude" value="(placeholder)" mono />
+            <Row label="Payment method" value="(placeholder)" />
+          </div>
+        </section>
 
         <div style={divider} />
 
-        {/* LEDGER */}
-        <div style={block}>
-          <Row label="Receipt ID" value={`#${receipt.id}`} mono />
-          <Row label="Epoch (ms)" value={String(receipt.ts)} mono />
-          <Row
-            label="Index in day"
-            value={`${engine!.dayIndex} of ${engine!.dayCount}`}
-            mono
-          />
-        </div>
+        {/* 4) Explore */}
+        <section style={section}>
+          <Title>Explore</Title>
+
+          <div style={menu}>
+            <MenuItem label="See all your transactions for this day" />
+            <MenuItem label="View this merchant across 365 days" />
+            <MenuItem label="Contact this merchant" />
+            <MenuItem label="Learn how the Engine works" />
+          </div>
+        </section>
 
         <div style={divider} />
 
-        {/* EXPLORE / ACTIONS */}
-        <div style={{ display: "grid", gap: 14 }}>
-          <div style={{ fontSize: 22, fontWeight: 650 }}>Explore</div>
-
-          <Action label={`View all transactions from ${receipt.place}`} />
-          <Action label="View full breakdown for this day" />
-          <Action label={`See ${receipt.place} across 365 days`} />
-          <Action label="Learn how the Engine works" />
-          <Action label="View location details" />
-        </div>
-
-        <div style={divider} />
-
-        {/* FOOTER */}
-        <div style={{ fontSize: 13, opacity: 0.55, lineHeight: 1.45 }}>
-          Outflō (placeholder)
-          <br />
-          Contact: (placeholder)
-          <br />
-          Support: (placeholder)
-        </div>
-
-        <div style={{ height: 18 }} />
+        {/* 5) Institutional Footer */}
+        <section style={{ ...section, paddingBottom: 32 }}>
+          <div style={footerBrand}>Outflō</div>
+          <div style={footerLine}>[Address placeholder]</div>
+          <div style={footerLine}>[City, State ZIP]</div>
+          <div style={footerLine}>[Phone placeholder]</div>
+        </section>
       </div>
     </main>
   );
 }
 
-/* --- tiny UI helpers --- */
+/* ---------- tiny UI helpers ---------- */
+
+function Title({ children }: { children: string }) {
+  return (
+    <div style={title}>
+      {children}
+    </div>
+  );
+}
 
 function Row({
   label,
@@ -324,22 +376,12 @@ function Row({
   mono?: boolean;
 }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 16,
-        alignItems: "baseline",
-      }}
-    >
-      <div style={{ fontSize: 14, opacity: 0.55 }}>{label}</div>
+    <div style={row}>
+      <div style={rowLabel}>{label}</div>
       <div
         style={{
-          fontSize: 14,
-          opacity: 0.9,
-          textAlign: "right",
-          fontVariantNumeric: "tabular-nums",
-          ...(mono ? { letterSpacing: "0.02em" } : {}),
+          ...rowValue,
+          ...(mono ? { fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" } : {}),
         }}
       >
         {value}
@@ -348,70 +390,164 @@ function Row({
   );
 }
 
-function Action({ label }: { label: string }) {
+function MenuItem({ label }: { label: string }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: 12,
-        padding: "10px 0",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-      }}
-    >
-      <div style={{ fontSize: 16, opacity: 0.9 }}>{label}</div>
-      <div style={{ fontSize: 22, opacity: 0.35 }}>›</div>
+    <div style={menuItem}>
+      <div style={{ fontSize: 16, opacity: 0.92 }}>{label}</div>
+      <div style={{ fontSize: 22, opacity: 0.30 }}>›</div>
     </div>
   );
 }
 
-const overlayWrap: React.CSSProperties = {
+/* ---------- styles (no outer box, full screen) ---------- */
+
+const wrap: React.CSSProperties = {
   minHeight: "100vh",
-  background: "rgba(0,0,0,0.92)",
+  background: "black",
   color: "white",
   display: "grid",
   placeItems: "start center",
-  padding: "max(24px, 6vh) 24px",
+  padding: "max(22px, 6vh) 18px",
 };
 
-const sheetStyle: React.CSSProperties = {
+const frame: React.CSSProperties = {
   width: "100%",
-  maxWidth: 760,
-  marginInline: "auto",
+  maxWidth: 720,
   boxSizing: "border-box",
   position: "relative",
-  borderRadius: 22,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(0,0,0,0.70)",
-  padding: "18px 18px 22px",
+};
+
+const navBand: React.CSSProperties = {
+  height: 56,
+  display: "flex",
+  alignItems: "center",
 };
 
 const xStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 10,
-  left: 10,
-  width: 44,
-  height: 44,
-  borderRadius: 999,
   background: "transparent",
   border: "none",
   color: "white",
-  fontSize: 34,
-  opacity: 0.8,
+  fontSize: 30,
+  opacity: 0.78,
   cursor: "pointer",
+  padding: 0,
+  width: 44,
+  height: 44,
   lineHeight: "44px",
+};
+
+const section: React.CSSProperties = {
+  display: "grid",
+  gap: 14,
+  padding: "10px 0",
+};
+
+const heroTopRow: React.CSSProperties = {
+  display: "flex",
+  gap: 12,
+  alignItems: "center",
+};
+
+const avatar: React.CSSProperties = {
+  width: 44,
+  height: 44,
+  borderRadius: 999,
+  display: "grid",
+  placeItems: "center",
+  fontSize: 18,
+  fontWeight: 700,
+  userSelect: "none",
+  flex: "0 0 auto",
+};
+
+const merchant: React.CSSProperties = {
+  fontSize: 22,
+  fontWeight: 650,
+  letterSpacing: "-0.02em",
+  opacity: 0.92,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const metaLine: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.58,
+  letterSpacing: "0.02em",
+};
+
+const amount: React.CSSProperties = {
+  fontSize: 62,
+  fontWeight: 760,
+  letterSpacing: "-0.05em",
+  fontVariantNumeric: "tabular-nums",
+  lineHeight: 1,
+  color: GLOW,
 };
 
 const divider: React.CSSProperties = {
   height: 1,
   background: "rgba(255,255,255,0.10)",
-  margin: "18px 0",
+  margin: "14px 0",
 };
 
-const block: React.CSSProperties = {
+const title: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.65,
+  letterSpacing: "0.08em",
+  textTransform: "none", // Title case as requested
+};
+
+const rows: React.CSSProperties = {
   display: "grid",
   gap: 12,
+};
+
+const row: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 16,
+  alignItems: "baseline",
+};
+
+const rowLabel: React.CSSProperties = {
+  fontSize: 14,
+  opacity: 0.55,
+};
+
+const rowValue: React.CSSProperties = {
+  fontSize: 14,
+  opacity: 0.92,
+  textAlign: "right",
+  maxWidth: "60%",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const menu: React.CSSProperties = {
+  display: "grid",
+};
+
+const menuItem: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "12px 0",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+};
+
+const footerBrand: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.75,
+  letterSpacing: "0.02em",
+};
+
+const footerLine: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.40,
+  lineHeight: 1.45,
 };
 
 const pillButtonStyle: React.CSSProperties = {
@@ -423,3 +559,4 @@ const pillButtonStyle: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
+
