@@ -351,7 +351,7 @@ export default function ReceiptsPage() {
                       return (
                         <Link
                           key={r.id}
-                          href={`/365/receipts/${encodeURIComponent(r.id)}`}
+                          href={`/365/receipts/${r.id}`}
                           style={{
                             textDecoration: "none",
                             color: "inherit",

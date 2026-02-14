@@ -115,7 +115,7 @@ export default function ReceiptDetailOverlay({
   params: { id: string };
 }) {
   const router = useRouter();
-  const id = decodeURIComponent(params.id);
+  const id = params.id;
 
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
