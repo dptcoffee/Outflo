@@ -9,27 +9,21 @@ type Receipt = {
   id: string;
   place: string;
   amount: number;
-  ts: number; // epoch ms (truth)
+  ts: number;
 };
 
 const STORAGE_KEY = "outflo_receipts_v1";
 const BACKUP_KEY = "outflo_receipts_v1_backup";
-
-// Time system epoch (single source of truth)
 const SYSTEM_EPOCH_KEY = "outflo_system_epoch_v1";
 
 const GLOW = "#FFFEFA";
 
-// Institutional footer (dense)
 const FOOTER_STREET = "314 Outflō Grove";
 const FOOTER_CITYSTATEZIP = "Miami, FL 33133";
 const FOOTER_PHONE = "+1 (305) 000-0000";
 
-// 33133 (Coconut Grove) neighborhood pin
 const LAT_33133 = "25.7280";
 const LNG_33133 = "-80.2374";
-
-/* ---------------- parsing ---------------- */
 
 function safeParseReceipts(raw: string | null): Receipt[] | null {
   if (!raw) return null;
@@ -52,8 +46,6 @@ function safeParseReceipts(raw: string | null): Receipt[] | null {
   }
 }
 
-/* ---------------- epoch helpers ---------------- */
-
 function getOrCreateSystemEpoch(): number {
   try {
     const raw = localStorage.getItem(SYSTEM_EPOCH_KEY);
@@ -67,8 +59,6 @@ function getOrCreateSystemEpoch(): number {
     return Date.now();
   }
 }
-
-/* ---------------- formatting ---------------- */
 
 function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
@@ -97,7 +87,6 @@ function formatExploreDate(ts: number) {
   });
 }
 
-// Ledger: time only (24h + seconds), no date
 function formatTime24WithSeconds(ts: number) {
   const d = new Date(ts);
   const hh = String(d.getHours()).padStart(2, "0");
@@ -142,8 +131,6 @@ function receiptSuffix(id: string) {
   return parts.length > 1 ? parts[1] : id;
 }
 
-/* ---------------- avatar (deterministic, matte) ---------------- */
-
 function firstGlyph(place: string) {
   const s = (place || "").trim();
   for (let i = 0; i < s.length; i++) {
@@ -170,8 +157,6 @@ function avatarColors(place: string) {
   };
 }
 
-/* ---------------- component ---------------- */
-
 export default function ReceiptDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -182,12 +167,10 @@ export default function ReceiptDetailPage() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [systemEpoch, setSystemEpoch] = useState<number | null>(null);
 
-  // connect to Time epoch origin (create if missing)
   useEffect(() => {
     setSystemEpoch(getOrCreateSystemEpoch());
   }, []);
 
-  // load receipts (primary -> backup)
   useEffect(() => {
     const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
     if (primary) {
@@ -241,10 +224,10 @@ export default function ReceiptDetailPage() {
       dayIndex: idx + 1,
       dayCount: asc.length,
       dayTotal: sumDay(sameDay),
+      dayKey,
     };
   }, [receipt, receipts]);
 
-  // ----- Captured User Epoch Time (Stamped at Receipt Moment) -----
   let userEpochTime = "(unavailable)";
   if (systemEpoch != null && receipt != null) {
     const elapsedMs = Math.max(0, receipt.ts - systemEpoch);
@@ -340,16 +323,16 @@ export default function ReceiptDetailPage() {
   const colors = avatarColors(receipt.place);
   const merchantName = (receipt.place || "").trim() || "Merchant";
   const exploreDate = formatExploreDate(receipt.ts);
+  const dayHref = `/365/day/${computed.dayKey}`;
 
   return (
     <main style={wrap}>
-      {/* X pinned to viewport left with black plate */}
       <button onClick={close} style={xFixed} aria-label="Close">
         ×
       </button>
 
       <div style={frame}>
-        {/* 1) Hero (no location) */}
+        {/* --- HERO --- */}
         <section style={{ ...section, paddingTop: NAV_H }}>
           <div style={heroStack}>
             <div style={{ ...avatar, background: colors.bg, color: colors.fg }}>
@@ -369,7 +352,7 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* 2) Position */}
+        {/* --- POSITION --- */}
         <section style={section}>
           <Title>Position</Title>
 
@@ -393,16 +376,12 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* 3) Ledger */}
+        {/* --- LEDGER --- */}
         <section style={section}>
           <Title>Ledger</Title>
 
           <div style={rows}>
-            <Row
-              label="Receipt ID"
-              value={`#${receiptSuffix(receipt.id)}`}
-              mono
-            />
+            <Row label="Receipt ID" value={`#${receiptSuffix(receipt.id)}`} mono />
             <Row
               label="Time (24h + seconds)"
               value={formatTime24WithSeconds(receipt.ts)}
@@ -421,22 +400,20 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* 4) Explore */}
+        {/* --- EXPLORE --- */}
         <section style={section}>
           <Title>Explore</Title>
 
           <div style={menu}>
-            <MenuItem label={`See all your transactions for ${exploreDate}`} />
-            <MenuItem
-              label={`View your ${merchantName} transactions across time`}
-            />
+            <MenuItem href={dayHref} label={`See all your transactions for ${exploreDate}`} />
+            <MenuItem label={`View your ${merchantName} transactions across time`} />
             <MenuItem label="Learn how the Engine works" />
           </div>
         </section>
 
         <div style={sectionDivider} />
 
-        {/* 5) Institutional Footer */}
+        {/* --- FOOTER --- */}
         <section style={footerSection}>
           <div style={footerBrand}>Outflō</div>
           <div style={footerLine}>{FOOTER_STREET}</div>
@@ -453,8 +430,6 @@ export default function ReceiptDetailPage() {
     </main>
   );
 }
-
-/* ---------------- helpers ---------------- */
 
 function Title({ children }: { children: string }) {
   return <div style={title}>{children}</div>;
@@ -487,16 +462,22 @@ function Row({
   );
 }
 
-function MenuItem({ label }: { label: string }) {
-  return (
+function MenuItem({ label, href }: { label: string; href?: string }) {
+  const inner = (
     <div style={menuItem}>
       <div style={menuLabel}>{label}</div>
       <div style={chev}>›</div>
     </div>
   );
-}
 
-/* ---------------- styles ---------------- */
+  if (!href) return inner;
+
+  return (
+    <Link href={href} style={menuLink}>
+      {inner}
+    </Link>
+  );
+}
 
 const NAV_H = 56;
 
@@ -516,11 +497,10 @@ const frame: React.CSSProperties = {
   position: "relative",
 };
 
-// fixed to viewport + black plate
 const xFixed: React.CSSProperties = {
   position: "fixed",
-  top: 12,
-  left: 12,
+  top: 6,
+  left: 6,
   width: 40,
   height: 40,
   lineHeight: "40px",
@@ -629,7 +609,6 @@ const rowValue: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-/* Explore (compact, no borders) */
 const menu: React.CSSProperties = {
   display: "grid",
   gap: 10,
@@ -654,7 +633,12 @@ const chev: React.CSSProperties = {
   lineHeight: "22px",
 };
 
-/* Footer: tight lines, then space, then URL */
+const menuLink: React.CSSProperties = {
+  textDecoration: "none",
+  color: "inherit",
+  display: "block",
+};
+
 const footerSection: React.CSSProperties = {
   display: "grid",
   gap: 2,
