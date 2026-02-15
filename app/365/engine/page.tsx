@@ -65,7 +65,7 @@ export default function EnginePage() {
 
         {/* --- LINK --- */}
         <section style={{ ...section, paddingBottom: 32 }}>
-          <Link href="/365/time" style={link}>
+          <Link href="/time" style={link}>
             View the running clock →
           </Link>
         </section>
