@@ -394,7 +394,7 @@ export default function ReceiptDetailPage() {
               value={`${LAT_33133}, ${LNG_33133}`}
               mono
             />
-            <Row label="Payment method" value="(placeholder)" />
+            <Row label="Payment method" value="coming soon" />
           </div>
         </section>
 
@@ -407,7 +407,7 @@ export default function ReceiptDetailPage() {
           <div style={menu}>
             <MenuItem href={dayHref} label={`See all your transactions for ${exploreDate}`} />
             <MenuItem label={`View your ${merchantName} transactions across time`} />
-            <MenuItem label="Learn how the Engine works" />
+            <MenuItem href="/365/engine" label="Learn how the Engine works"/>
           </div>
         </section>
 
