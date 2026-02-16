@@ -406,7 +406,7 @@ export default function ReceiptDetailPage() {
 
           <div style={menu}>
             <MenuItem href={dayHref} label={`See all your transactions for ${exploreDate}`} />
-            <MenuItem label={`View your ${merchantName} transactions across time`} />
+            <MenuItem href="/365/place" label={`View your ${merchantName} transactions across time`} />
             <MenuItem href="/365/engine" label="Learn how the Engine works"/>
           </div>
         </section>
