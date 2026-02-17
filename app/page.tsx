@@ -110,7 +110,7 @@ function VaultDoor() {
         return;
       }
 
-      router.replace(nextHref);
+      window.location.href = nextHref;
     } catch {
       setErr("Network error.");
       setBusy(false);
