@@ -3,7 +3,7 @@
 /* --- IMPORTS --- */
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 /* --- CONSTANTS --- */
@@ -42,15 +42,8 @@ async function unlockVault(key: string) {
 
 /* --- PAGE --- */
 export default function Home() {
-  const router = useRouter();
-  const sp = useSearchParams();
-
   const [now, setNow] = useState(() => Date.now());
   const [anchor, setAnchor] = useState<number | null>(null);
-
-  const [key, setKey] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     setAnchor(getOrCreateEpochStart());
@@ -64,11 +57,40 @@ export default function Home() {
     return now - anchor;
   }, [now, anchor]);
 
+  return (
+    <main style={wrap}>
+      {/* --- BRAND --- */}
+      <div style={brand}>
+        <Link href="/state" style={{ display: "inline-block" }}>
+          <Image src="/outflo.jpg" alt="Outflō" width={320} height={320} priority />
+        </Link>
+      </div>
+
+      {/* --- VAULT DOOR (SUSPENSE SAFE) --- */}
+      <Suspense fallback={null}>
+        <VaultDoor />
+      </Suspense>
+
+      {/* --- APP EPOCH HUM (13-digit zero-based ms) --- */}
+      <div style={hum}>{pad13(msSinceStart)}</div>
+    </main>
+  );
+}
+
+/* --- VAULT DOOR --- */
+function VaultDoor() {
+  const router = useRouter();
+  const sp = useSearchParams();
+
   const nextHref = useMemo(() => {
     const n = sp.get("next");
     if (!n) return "/365/engine";
     return n.startsWith("/") ? n : "/365/engine";
   }, [sp]);
+
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -96,34 +118,21 @@ export default function Home() {
   }
 
   return (
-    <main style={wrap}>
-      {/* --- BRAND --- */}
-      <div style={brand}>
-        <Link href="/state" style={{ display: "inline-block" }}>
-          <Image src="/outflo.jpg" alt="Outflō" width={320} height={320} priority />
-        </Link>
-      </div>
-
-      {/* --- VAULT DOOR --- */}
-      <form onSubmit={onSubmit} style={vault}>
-        <input
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          placeholder="Vault key"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          style={input}
-        />
-        <button type="submit" disabled={busy || key.trim().length === 0} style={button}>
-          {busy ? "…" : "Enter"}
-        </button>
-        {err ? <div style={error}>{err}</div> : null}
-      </form>
-
-      {/* --- APP EPOCH HUM (13-digit zero-based ms) --- */}
-      <div style={hum}>{pad13(msSinceStart)}</div>
-    </main>
+    <form onSubmit={onSubmit} style={vault}>
+      <input
+        value={key}
+        onChange={(e) => setKey(e.target.value)}
+        placeholder="Vault key"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+        style={input}
+      />
+      <button type="submit" disabled={busy || key.trim().length === 0} style={button}>
+        {busy ? "…" : "Enter"}
+      </button>
+      {err ? <div style={error}>{err}</div> : null}
+    </form>
   );
 }
 
