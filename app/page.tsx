@@ -153,7 +153,7 @@ const brand: React.CSSProperties = {
 
 const vault: React.CSSProperties = {
   position: "fixed",
-  bottom: "calc(env(safe-area-inset-bottom) + 18px)",
+  bottom: "max(calc(env(safe-area-inset-bottom) + 88px), 96px)", // bulletproof: clears bottom UI + safe area
   left: 18,
   right: 18,
   maxWidth: 520,
