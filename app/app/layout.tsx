@@ -1,12 +1,18 @@
-// app/app/layout.tsx
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getUser();
 
-  if (!data.user) redirect("/");
+  if (!data.user) {
+    redirect("/login");
+  }
 
   return <>{children}</>;
 }
+
