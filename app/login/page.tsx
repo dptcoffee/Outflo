@@ -1,107 +1,110 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-
-  // If we arrive here with #access_token=...&refresh_token=... (implicit flow),
-  // consume it client-side and persist the session, then redirect to `next`.
-  useEffect(() => {
-    async function consumeHashTokens() {
-      if (typeof window === "undefined") return;
-
-      const hash = window.location.hash?.startsWith("#")
-        ? window.location.hash.slice(1)
-        : "";
-
-      if (!hash) return;
-
-      const hashParams = new URLSearchParams(hash);
-      const access_token = hashParams.get("access_token");
-      const refresh_token = hashParams.get("refresh_token");
-
-      if (!access_token || !refresh_token) return;
-
-      const supabase = supabaseBrowser();
-
-      const { error } = await supabase.auth.setSession({
-        access_token,
-        refresh_token,
-      });
-
-      // Clean the URL (remove the hash tokens from address bar)
-      window.history.replaceState(
-        {},
-        document.title,
-        window.location.pathname + window.location.search
-      );
-
-      if (!error) {
-        const next = new URLSearchParams(window.location.search).get("next") ?? "/";
-        window.location.replace(next);
-      } else {
-        setMsg(error.message);
-      }
-    }
-
-    consumeHashTokens();
-  }, []);
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();
-    if (sending) return;
+    if (busy) return;
 
-    setSending(true);
+    setBusy(true);
     setMsg(null);
 
     const supabase = supabaseBrowser();
+
+    // ✅ ALWAYS return to callback without next params
+    const emailRedirectTo =
+      typeof window === "undefined"
+        ? undefined
+        : `${window.location.origin}/auth/callback`;
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { emailRedirectTo },
     });
 
     if (error) setMsg(error.message);
     else setSent(true);
 
-    setSending(false);
+    setBusy(false);
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 480 }}>
-      <h1>Sign in</h1>
+    <main
+      style={{
+        minHeight: "100svh",
+        background: "black",
+        color: "white",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 420 }}>
+        <h1 style={{ margin: 0, fontSize: 28 }}>Sign in</h1>
+        <p style={{ opacity: 0.7, marginTop: 10 }}>
+          We’ll email you a magic link.
+        </p>
 
-      {sent ? (
-        <p>Magic link sent. Check your email.</p>
-      ) : (
-        <form onSubmit={sendLink}>
-          <input
-            type="email"
-            placeholder="you@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{ width: "100%", padding: 12, marginTop: 12 }}
-          />
-          <button
-            type="submit"
-            disabled={sending}
-            style={{ marginTop: 12, padding: 12 }}
-          >
-            {sending ? "Sending..." : "Send magic link"}
-          </button>
-        </form>
-      )}
+        {sent ? (
+          <div style={{ marginTop: 18, opacity: 0.9 }}>
+            Magic link sent. Check your email.
+          </div>
+        ) : (
+          <form onSubmit={sendLink} style={{ marginTop: 18 }}>
+            <input
+              type="email"
+              placeholder="you@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              style={{
+                width: "100%",
+                height: 48,
+                borderRadius: 12,
+                padding: "0 14px",
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: "white",
+                outline: "none",
+                fontSize: 14,
+              }}
+            />
+            <button
+              type="submit"
+              disabled={busy || !email.trim()}
+              style={{
+                width: "100%",
+                height: 48,
+                marginTop: 12,
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.14)",
+                color: "white",
+                fontSize: 14,
+                cursor: busy ? "default" : "pointer",
+              }}
+            >
+              {busy ? "Sending…" : "Send magic link"}
+            </button>
+          </form>
+        )}
 
-      {msg && <p style={{ marginTop: 12 }}>{msg}</p>}
+        {msg && <div style={{ marginTop: 12, color: "#ff9a9a" }}>{msg}</div>}
+      </div>
     </main>
   );
 }
+
+
 
 

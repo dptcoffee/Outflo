@@ -2,14 +2,19 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code");
 
-  if (code) {
-    const supabase = await supabaseServer();
-    await supabase.auth.exchangeCodeForSession(code);
+  // If no code, bounce to login (still safe)
+  if (!code) {
+    return NextResponse.redirect(new URL("/login", url));
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  const supabase = await supabaseServer();
+  await supabase.auth.exchangeCodeForSession(code);
+
+  // ✅ ALWAYS HOME after login
+  return NextResponse.redirect(new URL("/", url));
 }
+
+

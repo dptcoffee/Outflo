@@ -1,3 +1,4 @@
+// lib/supabase/server.ts
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
@@ -13,19 +14,18 @@ export async function supabaseServer() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
-            });
-          } catch {
-            // If called from a Server Component, Next may block writes.
-            // Route Handlers / Server Actions can still set cookies.
-          }
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
         },
       },
     }
   );
 }
+
+
+
+
 
 
 
