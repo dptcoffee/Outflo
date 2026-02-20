@@ -1,4 +1,4 @@
-// app/365/receipts/[id]/page.tsx
+// app/money/receipts/[id]/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -253,7 +253,7 @@ export default function ReceiptDetailPage() {
     try {
       router.back();
     } catch {
-      router.push("/365/receipts");
+      router.push("/app/money/receipts");
     }
   }
 
@@ -309,7 +309,7 @@ export default function ReceiptDetailPage() {
           </div>
 
           <button
-            onClick={() => router.push("/365/receipts")}
+            onClick={() => router.push("/app/money/receipts")}
             style={pillButtonStyle}
           >
             Back to receipts
@@ -323,7 +323,7 @@ export default function ReceiptDetailPage() {
   const colors = avatarColors(receipt.place);
   const merchantName = (receipt.place || "").trim() || "Merchant";
   const exploreDate = formatExploreDate(receipt.ts);
-  const dayHref = `/365/day/${computed.dayKey}`;
+  const dayHref = `/app/money/day/${computed.dayKey}`;
 
   return (
     <main style={wrap}>
@@ -406,9 +406,9 @@ export default function ReceiptDetailPage() {
 
           <div style={menu}>
             <MenuItem href={dayHref} label={`See all your transactions for ${exploreDate}`} />
-            <MenuItem href={`/365/place/${encodeURIComponent(merchantName)}`}
+            <MenuItem href={`/app/money/place/${encodeURIComponent(merchantName)}`}
             label={`View your ${merchantName} transactions across time`}/>
-            <MenuItem href="/365/engine" label="Learn how the Engine works"/>
+            <MenuItem href="/app/money/about" label="Learn how the Engine works"/>
           </div>
         </section>
 

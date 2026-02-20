@@ -1,4 +1,4 @@
-// app/365/day/[key]/page.tsx
+// app/money/day/[key]/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -240,7 +240,7 @@ export default function DayPage() {
           }}
         >
           <Link
-            href="/365/receipts"
+            href="/app/money/receipts"
             style={{
               color: "white",
               opacity: 0.7,
@@ -293,7 +293,7 @@ export default function DayPage() {
               return (
                 <Link
                   key={r.id}
-                  href={`/365/receipts/${encodeURIComponent(r.id)}`}
+                  href={`/app/money/receipts/${encodeURIComponent(r.id)}`}
                   style={{
                     textDecoration: "none",
                     color: "inherit",

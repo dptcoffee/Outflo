@@ -1,4 +1,4 @@
-// app/365/place/[slug]/page.tsx
+// app/money/place/[slug]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -241,7 +241,7 @@ export default function PlacePage() {
     try {
       router.back();
     } catch {
-      router.push("/365/receipts");
+      router.push("/app/money/receipts");
     }
   }
 
@@ -277,7 +277,7 @@ export default function PlacePage() {
             vault: <span style={{ fontVariantNumeric: "tabular-nums" }}>{receipts.length}</span>
           </div>
 
-          <Link href="/365/receipts" style={linkPill}>
+          <Link href="/app/money/receipts" style={linkPill}>
             Back to receipts
           </Link>
         </div>

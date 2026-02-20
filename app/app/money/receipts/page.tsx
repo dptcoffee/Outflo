@@ -1,4 +1,4 @@
-// app/365/receipts/page.tsx
+// app/money/receipts/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -262,7 +262,7 @@ export default function ReceiptsPage() {
           }}
         >
           <Link
-            href="/365/money"
+            href="/app/money"
             style={{
               color: "white",
               opacity: 0.7,
@@ -352,7 +352,7 @@ export default function ReceiptsPage() {
                         <Link
                           key={r.id}
                           // IMPORTANT: encode id for URL safety
-                          href={`/365/receipts/${encodeURIComponent(r.id)}`}
+                          href={`/app/money/receipts/${encodeURIComponent(r.id)}`}
                           style={{
                             textDecoration: "none",
                             color: "inherit",
