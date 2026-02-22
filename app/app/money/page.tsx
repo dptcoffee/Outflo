@@ -1,8 +1,10 @@
 "use client";
 
+/* --- IMPORTS --- */
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+/* --- TYPES --- */
 type Receipt = {
   id: string;
   place: string;
@@ -10,9 +12,11 @@ type Receipt = {
   ts: number; // epoch ms
 };
 
-const STORAGE_KEY = "outflo_receipts_v1";
-const BACKUP_KEY = "outflo_receipts_v1_backup";
+/* --- STORAGE --- */
+// Cloud source of truth
+const API_RECEIPTS = "/api/receipts";
 
+/* --- COMPUTE --- */
 function startOfTodayLocal(nowTs: number) {
   const d = new Date(nowTs);
   d.setHours(0, 0, 0, 0);
@@ -29,56 +33,88 @@ function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-function safeParseReceipts(raw: string | null): Receipt[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    // minimal shape check
-    const cleaned = parsed.filter((t: any) =>
+/* --- HANDLERS --- */
+async function apiGetReceipts(): Promise<Receipt[]> {
+  const res = await fetch(API_RECEIPTS, {
+    method: "GET",
+    cache: "no-store",
+    credentials: "include",
+  });
+
+  if (!res.ok) throw new Error(`GET /api/receipts failed (${res.status})`);
+  const json = await res.json();
+  const receipts = Array.isArray(json?.receipts) ? json.receipts : [];
+
+  // minimal shape filter
+  return receipts.filter(
+    (t: any) =>
       t &&
       typeof t.id === "string" &&
       typeof t.place === "string" &&
       typeof t.amount === "number" &&
       typeof t.ts === "number"
-    );
-    return cleaned;
-  } catch {
-    return null;
-  }
+  );
 }
 
+async function apiPostReceipt(input: {
+  place: string;
+  amount: number;
+  ts: number;
+}): Promise<Receipt> {
+  const res = await fetch(API_RECEIPTS, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) throw new Error(`POST /api/receipts failed (${res.status})`);
+  const json = await res.json();
+  const r = json?.receipt;
+
+  if (
+    !r ||
+    typeof r.id !== "string" ||
+    typeof r.place !== "string" ||
+    typeof r.amount !== "number" ||
+    typeof r.ts !== "number"
+  ) {
+    throw new Error("Invalid receipt response");
+  }
+
+  return r as Receipt;
+}
+
+/* --- STATE --- */
 export default function Engine365() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [place, setPlace] = useState("");
   const [amount, setAmount] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  // Load: primary -> backup fallback
+  /* --- EFFECTS --- */
   useEffect(() => {
-    const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
-    if (primary) {
-      setReceipts(primary);
-      return;
-    }
-    const backup = safeParseReceipts(localStorage.getItem(BACKUP_KEY));
-    if (backup) {
-      setReceipts(backup);
-      // restore primary if it was broken/missing
+    let alive = true;
+
+    (async () => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(backup));
-      } catch {}
-    }
+        const rs = await apiGetReceipts();
+        if (!alive) return;
+        setReceipts(rs);
+      } catch {
+        // silent fail = non-blocking
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  // Save: primary + backup (vault hardening)
-  useEffect(() => {
-    try {
-      const s = JSON.stringify(receipts);
-      localStorage.setItem(STORAGE_KEY, s);
-      localStorage.setItem(BACKUP_KEY, s);
-    } catch {}
-  }, [receipts]);
-
+  /* --- COMPUTE --- */
   const nowTs = Date.now();
 
   const { todaySpend, spend365 } = useMemo(() => {
@@ -94,7 +130,8 @@ export default function Engine365() {
     };
   }, [receipts, nowTs]);
 
-  function addReceipt() {
+  /* --- HANDLERS --- */
+  async function addReceipt() {
     const p = place.trim();
     const a = Number(amount);
 
@@ -103,20 +140,18 @@ export default function Engine365() {
 
     const t = Date.now();
 
-    const r: Receipt = {
-      id: `${t}-${Math.random().toString(16).slice(2)}`,
-      place: p,
-      amount: a,
-      ts: t,
-    };
-
-    // append-only vault behavior
-    setReceipts((prev) => [r, ...prev]);
-
-    setPlace("");
-    setAmount("");
+    try {
+      const created = await apiPostReceipt({ place: p, amount: a, ts: t });
+      // append-only behavior, cloud-confirmed
+      setReceipts((prev) => [created, ...prev]);
+      setPlace("");
+      setAmount("");
+    } catch {
+      // silent fail for sprint (no UI sprawl)
+    }
   }
 
+  /* --- RENDER --- */
   return (
     <main
       style={{
@@ -180,7 +215,7 @@ export default function Engine365() {
             style={inputStyle}
           />
 
-          <button onClick={addReceipt} style={buttonStyle}>
+          <button onClick={addReceipt} style={buttonStyle} disabled={loading}>
             Add
           </button>
 
@@ -210,6 +245,7 @@ export default function Engine365() {
   );
 }
 
+/* --- STORAGE --- */
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "16px 18px",

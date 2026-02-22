@@ -1,10 +1,12 @@
 // app/money/receipts/page.tsx
 "use client";
 
+/* --- IMPORTS --- */
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+/* --- TYPES --- */
 type Receipt = {
   id: string;
   place: string;
@@ -12,30 +14,11 @@ type Receipt = {
   ts: number; // epoch ms (truth)
 };
 
-const STORAGE_KEY = "outflo_receipts_v1";
-const BACKUP_KEY = "outflo_receipts_v1_backup";
+/* --- STORAGE --- */
+// Cloud source of truth
+const API_RECEIPTS = "/api/receipts";
 
-function safeParseReceipts(raw: string | null): Receipt[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-
-    const cleaned = parsed.filter(
-      (t: any) =>
-        t &&
-        typeof t.id === "string" &&
-        typeof t.place === "string" &&
-        typeof t.amount === "number" &&
-        typeof t.ts === "number"
-    );
-
-    return cleaned;
-  } catch {
-    return null;
-  }
-}
-
+/* --- COMPUTE --- */
 function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
@@ -137,29 +120,59 @@ function downloadTextFile(filename: string, content: string, mime: string) {
   } catch {}
 }
 
+async function apiGetReceipts(): Promise<Receipt[]> {
+  const res = await fetch(API_RECEIPTS, {
+    method: "GET",
+    cache: "no-store",
+    credentials: "include",
+  });
+
+  if (!res.ok) throw new Error(`GET /api/receipts failed (${res.status})`);
+  const json = await res.json();
+  const receipts = Array.isArray(json?.receipts) ? json.receipts : [];
+
+  // minimal shape filter
+  return receipts.filter(
+    (t: any) =>
+      t &&
+      typeof t.id === "string" &&
+      typeof t.place === "string" &&
+      typeof t.amount === "number" &&
+      typeof t.ts === "number"
+  );
+}
+
+/* --- STATE --- */
 export default function ReceiptsPage() {
   const router = useRouter();
 
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [tapCount, setTapCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  // Load primary -> backup fallback
+  /* --- EFFECTS --- */
   useEffect(() => {
-    const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
-    if (primary) {
-      setReceipts(primary);
-      return;
-    }
+    let alive = true;
 
-    const backup = safeParseReceipts(localStorage.getItem(BACKUP_KEY));
-    if (backup) {
-      setReceipts(backup);
+    (async () => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(backup));
-      } catch {}
-    }
+        const rs = await apiGetReceipts();
+        if (!alive) return;
+        setReceipts(rs);
+      } catch {
+        // silent fail for sprint
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
+  /* --- COMPUTE --- */
   const sortedLimited = useMemo(() => {
     const sorted = [...receipts].sort((a, b) => b.ts - a.ts);
     return sorted.slice(0, 300);
@@ -211,12 +224,13 @@ export default function ReceiptsPage() {
   const showCsv = tapCount >= 3;
   const showAdmin = tapCount >= 11;
 
+  /* --- HANDLERS --- */
   function onTapTitle() {
     setTapCount((n) => n + 1);
   }
 
   function exportCsv() {
-    const sorted = [...receipts].sort((a, b) => b.ts - a.ts); // full vault
+    const sorted = [...receipts].sort((a, b) => b.ts - a.ts); // full vault (cloud)
     const csv = receiptsToCsv(sorted);
     downloadTextFile(
       `outflo_receipts_${Date.now()}.csv`,
@@ -231,6 +245,7 @@ export default function ReceiptsPage() {
     router.push("/365/export");
   }
 
+  /* --- RENDER --- */
   return (
     <main
       style={{
@@ -319,7 +334,9 @@ export default function ReceiptsPage() {
         </div>
 
         {/* Grouped by day */}
-        {sortedLimited.length === 0 ? (
+        {loading ? (
+          <div style={{ fontSize: 12, opacity: 0.35 }}>Loading…</div>
+        ) : sortedLimited.length === 0 ? (
           <div style={{ fontSize: 12, opacity: 0.35 }}>No receipts yet.</div>
         ) : (
           <div style={{ display: "grid", gap: 18 }}>
@@ -351,8 +368,9 @@ export default function ReceiptsPage() {
                       return (
                         <Link
                           key={r.id}
-                          // IMPORTANT: encode id for URL safety
-                          href={`/app/money/receipts/${encodeURIComponent(r.id)}`}
+                          href={`/app/money/receipts/${encodeURIComponent(
+                            r.id
+                          )}`}
                           style={{
                             textDecoration: "none",
                             color: "inherit",
@@ -441,13 +459,14 @@ export default function ReceiptsPage() {
         )}
 
         <div style={{ fontSize: 11, opacity: 0.22 }}>
-          Stored locally. Export recommended.
+          Stored in cloud. Export recommended.
         </div>
       </section>
     </main>
   );
 }
 
+/* --- STORAGE --- */
 const pillButtonStyle: React.CSSProperties = {
   background: "rgba(255,255,255,0.10)",
   border: "1px solid rgba(255,255,255,0.14)",
@@ -467,7 +486,6 @@ const dangerButtonStyle: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
-
 
 
 
