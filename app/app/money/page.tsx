@@ -1,10 +1,15 @@
 "use client";
 
-/* --- IMPORTS --- */
+/* ------------------------------
+   IMPORTS
+-------------------------------- */
+import type React from "react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-/* --- TYPES --- */
+/* ------------------------------
+   TYPES
+-------------------------------- */
 type Receipt = {
   id: string;
   place: string;
@@ -12,11 +17,15 @@ type Receipt = {
   ts: number; // epoch ms
 };
 
-/* --- STORAGE --- */
+/* ------------------------------
+   STORAGE
+-------------------------------- */
 // Cloud source of truth
 const API_RECEIPTS = "/api/receipts";
 
-/* --- COMPUTE --- */
+/* ------------------------------
+   COMPUTE
+-------------------------------- */
 function startOfTodayLocal(nowTs: number) {
   const d = new Date(nowTs);
   d.setHours(0, 0, 0, 0);
@@ -33,7 +42,9 @@ function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-/* --- HANDLERS --- */
+/* ------------------------------
+   API
+-------------------------------- */
 async function apiGetReceipts(): Promise<Receipt[]> {
   const res = await fetch(API_RECEIPTS, {
     method: "GET",
@@ -42,6 +53,7 @@ async function apiGetReceipts(): Promise<Receipt[]> {
   });
 
   if (!res.ok) throw new Error(`GET /api/receipts failed (${res.status})`);
+
   const json = await res.json();
   const receipts = Array.isArray(json?.receipts) ? json.receipts : [];
 
@@ -69,6 +81,7 @@ async function apiPostReceipt(input: {
   });
 
   if (!res.ok) throw new Error(`POST /api/receipts failed (${res.status})`);
+
   const json = await res.json();
   const r = json?.receipt;
 
@@ -85,14 +98,21 @@ async function apiPostReceipt(input: {
   return r as Receipt;
 }
 
-/* --- STATE --- */
-export default function Engine365() {
+/* ------------------------------
+   PAGE
+-------------------------------- */
+export default function MoneyPage() {
+  /* ------------------------------
+     STATE
+  -------------------------------- */
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [place, setPlace] = useState("");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(true);
 
-  /* --- EFFECTS --- */
+  /* ------------------------------
+     EFFECTS
+  -------------------------------- */
   useEffect(() => {
     let alive = true;
 
@@ -114,7 +134,10 @@ export default function Engine365() {
     };
   }, []);
 
-  /* --- COMPUTE --- */
+  /* ------------------------------
+     COMPUTE
+  -------------------------------- */
+  // NOTE: this will be stabilized in Priority #3 (clock jitter).
   const nowTs = Date.now();
 
   const { todaySpend, spend365 } = useMemo(() => {
@@ -130,7 +153,9 @@ export default function Engine365() {
     };
   }, [receipts, nowTs]);
 
-  /* --- HANDLERS --- */
+  /* ------------------------------
+     HANDLERS
+  -------------------------------- */
   async function addReceipt() {
     const p = place.trim();
     const a = Number(amount);
@@ -151,7 +176,9 @@ export default function Engine365() {
     }
   }
 
-  /* --- RENDER --- */
+  /* ------------------------------
+     RENDER
+  -------------------------------- */
   return (
     <div
       style={{
@@ -166,9 +193,10 @@ export default function Engine365() {
     >
       <section
         style={{
-          width: "100%", // <- obey global 520 frame
+          width: "100%", // obey global 520 frame
           display: "grid",
           rowGap: "clamp(28px, 5vh, 56px)",
+          boxSizing: "border-box",
         }}
       >
         {/* Today Spend */}
@@ -201,15 +229,51 @@ export default function Engine365() {
 
         {/* Inputs */}
         <div style={{ display: "grid", rowGap: 14 }}>
-          {/* (keep your inputs/buttons/link exactly as-is) */}
-          ...
+          <input
+            placeholder="Place"
+            value={place}
+            onChange={(e) => setPlace(e.target.value)}
+            style={inputStyle}
+          />
+
+          <input
+            placeholder="Amount"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            style={inputStyle}
+          />
+
+          <button onClick={addReceipt} style={buttonStyle} disabled={loading}>
+            Add
+          </button>
+
+          {/* Receipts Count (Left Aligned, Bold Number) */}
+          <div style={{ fontSize: 13, opacity: 0.85 }}>
+            <Link
+              href="/app/money/receipts"
+              style={{ textDecoration: "none", color: "white" }}
+            >
+              Receipts:{" "}
+              <span
+                style={{
+                  fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {receipts.length}
+              </span>
+            </Link>
+          </div>
         </div>
       </section>
     </div>
   );
 }
 
-/* --- STORAGE --- */
+/* ------------------------------
+   STYLES
+-------------------------------- */
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "16px 18px",
