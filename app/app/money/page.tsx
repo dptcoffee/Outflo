@@ -153,19 +153,20 @@ export default function Engine365() {
 
   /* --- RENDER --- */
   return (
-    <main
+    <div
       style={{
-        minHeight: "100vh",
+        minHeight: "100svh",
         backgroundColor: "black",
         color: "white",
         display: "grid",
         placeItems: "center",
-        padding: "max(24px, 6vh) 24px",
+        padding: "max(24px, 6vh) 0px", // vertical only; global frame owns horizontal
+        width: "100%",
       }}
     >
       <section
         style={{
-          width: "min(640px, 92vw)",
+          width: "100%", // <- obey global 520 frame
           display: "grid",
           rowGap: "clamp(28px, 5vh, 56px)",
         }}
@@ -200,48 +201,11 @@ export default function Engine365() {
 
         {/* Inputs */}
         <div style={{ display: "grid", rowGap: 14 }}>
-          <input
-            placeholder="Place"
-            value={place}
-            onChange={(e) => setPlace(e.target.value)}
-            style={inputStyle}
-          />
-
-          <input
-            placeholder="Amount"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            style={inputStyle}
-          />
-
-          <button onClick={addReceipt} style={buttonStyle} disabled={loading}>
-            Add
-          </button>
-
-          {/* Receipts Count (Left Aligned, Bold Number) */}
-          <div style={{ fontSize: 13, opacity: 0.85 }}>
-            <Link
-              href="/app/money/receipts"
-              style={{
-                textDecoration: "none",
-                color: "white",
-              }}
-            >
-              Receipts:{" "}
-              <span
-                style={{
-                  fontWeight: 700,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {receipts.length}
-              </span>
-            </Link>
-          </div>
+          {/* (keep your inputs/buttons/link exactly as-is) */}
+          ...
         </div>
       </section>
-    </main>
+    </div>
   );
 }
 
