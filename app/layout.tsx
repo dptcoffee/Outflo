@@ -49,13 +49,18 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased h-full min-h-[100dvh] w-full overflow-x-hidden`}
       >
         <SwipeShell>
-          {/* GLOBAL FRAME CONTRACT */}
-          <div className="min-h-[100dvh] w-full flex justify-center">
-            <main className="w-full max-w-[520px] px-4 py-4">
-              {children}
-            </main>
-          </div>
-        </SwipeShell>
+  {/* GLOBAL FRAME CONTRACT */}
+  <div className="min-h-[100dvh] w-full">
+    <main className="
+        w-full max-w-[520px] mx-auto py-4 box-border
+        px-[calc(16px+env(safe-area-inset-left))]
+        pr-[calc(16px+env(safe-area-inset-right))]
+      "
+    >
+      {children}
+    </main>
+  </div>
+</SwipeShell>
       </body>
     </html>
   );
