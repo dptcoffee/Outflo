@@ -1,20 +1,28 @@
-// app/app/systems/page.tsx
+/* ------------------------------
+   app/app/systems/page.tsx
+-------------------------------- */
 import Link from "next/link";
 
+/* ------------------------------
+   Systems Page
+-------------------------------- */
 export default function SystemsPage() {
   return (
-    <main
+    <div
       style={{
         minHeight: "100svh",
         backgroundColor: "black",
         color: "white",
-        padding: "max(24px, 6vh) 24px",
+        padding: "max(24px, 6vh) 0px", // vertical only; global frame owns horizontal padding
         display: "grid",
         placeItems: "center",
+        width: "100%",
       }}
     >
-      <section style={{ width: "min(760px, 94vw)" }}>
-        <div style={{ fontSize: 13, opacity: 0.55, marginBottom: 14 }}>systems</div>
+      <section style={{ width: "100%" }}>
+        <div style={{ fontSize: 13, opacity: 0.55, marginBottom: 14 }}>
+          systems
+        </div>
 
         <div
           style={{
@@ -32,14 +40,27 @@ export default function SystemsPage() {
         </div>
 
         <div style={{ marginTop: 18 }}>
-          <Link href="/app" style={{ color: "white", opacity: 0.7 }}>← Back</Link>
+          <Link href="/app" style={{ color: "white", opacity: 0.7 }}>
+            ← Back
+          </Link>
         </div>
       </section>
-    </main>
+    </div>
   );
 }
 
-function Tile({ href, label, enabled }: { href: string; label: string; enabled: boolean }) {
+/* ------------------------------
+   Tile
+-------------------------------- */
+function Tile({
+  href,
+  label,
+  enabled,
+}: {
+  href: string;
+  label: string;
+  enabled: boolean;
+}) {
   const style: React.CSSProperties = {
     textDecoration: "none",
     color: "white",
@@ -57,7 +78,9 @@ function Tile({ href, label, enabled }: { href: string; label: string; enabled: 
   return (
     <Link href={enabled ? href : "#"} style={style}>
       <div style={{ fontSize: 20, fontWeight: 650 }}>{label}</div>
-      <div style={{ fontSize: 13, opacity: 0.55 }}>{enabled ? "Open" : "Soon"}</div>
+      <div style={{ fontSize: 13, opacity: 0.55 }}>
+        {enabled ? "Open" : "Soon"}
+      </div>
     </Link>
   );
 }

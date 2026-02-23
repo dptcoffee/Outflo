@@ -254,14 +254,13 @@ export default function ReceiptsPage() {
         color: "white",
         display: "grid",
         placeItems: "center",
-        padding: "max(24px, 6vh) 24px",
+        padding: "max(24px, 6vh) 0px", // vertical only; global frame owns horizontal
+        width: "100%",
       }}
     >
       <section
         style={{
           width: "100%",
-          maxWidth: 760,
-          marginInline: "auto",
           display: "grid",
           gap: 16,
           boxSizing: "border-box",
