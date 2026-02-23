@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSwipe } from "../hooks/useSwipe";
 
-const ROUTES = ["/", "/365", "/time"];
+const ROUTES = ["/", "/app/systems", "/time"];
 
 function idxOf(pathname: string) {
   const i = ROUTES.indexOf(pathname);
@@ -17,7 +17,7 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   // Hide bottom nav on drill-down pages (e.g. receipt detail)
-  const hideNav = pathname.startsWith("/365/receipts/");
+  const hideNav = pathname.startsWith("/app/money/receipts/");
 
   const { left, right } = useMemo(() => {
     const i = idxOf(pathname);
@@ -32,7 +32,9 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
     <div
       {...swipe}
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
+        width: "100%",
+        overflowX: "hidden",
         touchAction: "pan-y",
         position: "relative",
       }}
@@ -45,7 +47,7 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
             position: "fixed",
             left: 0,
             right: 0,
-            bottom: 18,
+            bottom: "calc(18px + env(safe-area-inset-bottom))",
             display: "flex",
             justifyContent: "center",
             pointerEvents: "none",
@@ -64,7 +66,7 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
             }}
           >
             <Pill href="/" active={pathname === "/"} label="Home" />
-            <Pill href="/365" active={pathname === "/365"} label="Systems" />
+            <Pill href="/app/systems" active={pathname === "/app/systems"} label="Systems" />
             <Pill href="/time" active={pathname === "/time"} label="Time" />
           </div>
         </nav>
