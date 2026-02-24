@@ -1,10 +1,21 @@
-// app/money/receipts/[id]/page.tsx
+/* ==========================================================
+   OUTFLO — RECEIPT DETAIL PAGE
+   File: app/money/receipts/[id]/page.tsx
+   Scope: Render a single receipt (cloud truth) with day + 365 context
+   ========================================================== */
+
+/* ------------------------------
+   Imports
+-------------------------------- */
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+/* ------------------------------
+   Types
+-------------------------------- */
 type Receipt = {
   id: string;
   place: string;
@@ -12,8 +23,9 @@ type Receipt = {
   ts: number;
 };
 
-const STORAGE_KEY = "outflo_receipts_v1";
-const BACKUP_KEY = "outflo_receipts_v1_backup";
+/* ------------------------------
+   Constants
+-------------------------------- */
 const SYSTEM_EPOCH_KEY = "outflo_system_epoch_v1";
 
 const GLOW = "#FFFEFA";
@@ -25,27 +37,11 @@ const FOOTER_PHONE = "+1 (305) 000-0000";
 const LAT_33133 = "25.7280";
 const LNG_33133 = "-80.2374";
 
-function safeParseReceipts(raw: string | null): Receipt[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
+const NAV_H = 56;
 
-    const cleaned = parsed.filter(
-      (t: any) =>
-        t &&
-        typeof t.id === "string" &&
-        typeof t.place === "string" &&
-        typeof t.amount === "number" &&
-        typeof t.ts === "number"
-    );
-
-    return cleaned;
-  } catch {
-    return null;
-  }
-}
-
+/* ------------------------------
+   Helpers
+-------------------------------- */
 function getOrCreateSystemEpoch(): number {
   try {
     const raw = localStorage.getItem(SYSTEM_EPOCH_KEY);
@@ -157,6 +153,9 @@ function avatarColors(place: string) {
   };
 }
 
+/* ------------------------------
+   Component
+-------------------------------- */
 export default function ReceiptDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -164,6 +163,7 @@ export default function ReceiptDetailPage() {
   const id = Array.isArray(raw) ? raw[0] : (raw ?? "");
 
   const [loaded, setLoaded] = useState(false);
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [systemEpoch, setSystemEpoch] = useState<number | null>(null);
 
@@ -172,35 +172,57 @@ export default function ReceiptDetailPage() {
   }, []);
 
   useEffect(() => {
-    const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
-    if (primary) {
-      setReceipts(primary);
-      setLoaded(true);
-      return;
-    }
+    let alive = true;
 
-    const backup = safeParseReceipts(localStorage.getItem(BACKUP_KEY));
-    if (backup) {
-      setReceipts(backup);
+    async function run() {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(backup));
-      } catch {}
+        // 1) authoritative receipt by id (cloud truth)
+        const r1 = await fetch(`/api/receipts/${encodeURIComponent(id)}`, {
+          cache: "no-store",
+        });
+
+        if (!r1.ok) {
+          if (!alive) return;
+          setReceipt(null);
+          setReceipts([]);
+          setLoaded(true);
+          return;
+        }
+
+        const j1 = await r1.json();
+        const one: Receipt | null = j1?.receipt ?? null;
+
+        // 2) list for day + 365 context (cloud truth)
+        const r2 = await fetch("/api/receipts", { cache: "no-store" });
+        const j2 = await r2.json();
+        const list: Receipt[] = Array.isArray(j2?.receipts) ? j2.receipts : [];
+
+        if (!alive) return;
+        setReceipt(one);
+        setReceipts(list);
+        setLoaded(true);
+      } catch {
+        if (!alive) return;
+        setReceipt(null);
+        setReceipts([]);
+        setLoaded(true);
+      }
+    }
+
+    if (!id) {
+      setReceipt(null);
+      setReceipts([]);
       setLoaded(true);
       return;
     }
 
-    setReceipts([]);
-    setLoaded(true);
-  }, []);
+    setLoaded(false);
+    run();
 
-  const receipt = useMemo(() => {
-    if (!id) return null;
-    return (
-      receipts.find((x) => x.id === id) ??
-      receipts.find((x) => x.id === decodeURIComponent(id)) ??
-      null
-    );
-  }, [receipts, id]);
+    return () => {
+      alive = false;
+    };
+  }, [id]);
 
   const computed = useMemo(() => {
     if (!receipt) return null;
@@ -302,7 +324,7 @@ export default function ReceiptDetailPage() {
               {id || "(empty)"}
             </span>
             {" · "}
-            vault:{" "}
+            cloud:{" "}
             <span style={{ fontVariantNumeric: "tabular-nums" }}>
               {receipts.length}
             </span>
@@ -332,7 +354,9 @@ export default function ReceiptDetailPage() {
       </button>
 
       <div style={frame}>
-        {/* --- HERO --- */}
+        {/* ------------------------------
+           Hero
+        -------------------------------- */}
         <section style={{ ...section, paddingTop: NAV_H }}>
           <div style={heroStack}>
             <div style={{ ...avatar, background: colors.bg, color: colors.fg }}>
@@ -352,7 +376,9 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* --- POSITION --- */}
+        {/* ------------------------------
+           Position
+        -------------------------------- */}
         <section style={section}>
           <Title>Position</Title>
 
@@ -376,7 +402,9 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* --- LEDGER --- */}
+        {/* ------------------------------
+           Ledger
+        -------------------------------- */}
         <section style={section}>
           <Title>Ledger</Title>
 
@@ -400,21 +428,30 @@ export default function ReceiptDetailPage() {
 
         <div style={sectionDivider} />
 
-        {/* --- EXPLORE --- */}
+        {/* ------------------------------
+           Explore
+        -------------------------------- */}
         <section style={section}>
           <Title>Explore</Title>
 
           <div style={menu}>
-            <MenuItem href={dayHref} label={`See all your transactions for ${exploreDate}`} />
-            <MenuItem href={`/app/money/place/${encodeURIComponent(merchantName)}`}
-            label={`View your ${merchantName} transactions across time`}/>
-            <MenuItem href="/app/money/about" label="Learn how the Engine works"/>
+            <MenuItem
+              href={dayHref}
+              label={`See all your transactions for ${exploreDate}`}
+            />
+            <MenuItem
+              href={`/app/money/place/${encodeURIComponent(merchantName)}`}
+              label={`View your ${merchantName} transactions across time`}
+            />
+            <MenuItem href="/app/money/about" label="Learn how the Engine works" />
           </div>
         </section>
 
         <div style={sectionDivider} />
 
-        {/* --- FOOTER --- */}
+        {/* ------------------------------
+           Footer
+        -------------------------------- */}
         <section style={footerSection}>
           <div style={footerBrand}>Outflō</div>
           <div style={footerLine}>{FOOTER_STREET}</div>
@@ -432,6 +469,9 @@ export default function ReceiptDetailPage() {
   );
 }
 
+/* ------------------------------
+   Subcomponents
+-------------------------------- */
 function Title({ children }: { children: string }) {
   return <div style={title}>{children}</div>;
 }
@@ -480,8 +520,9 @@ function MenuItem({ label, href }: { label: string; href?: string }) {
   );
 }
 
-const NAV_H = 56;
-
+/* ------------------------------
+   Styles
+-------------------------------- */
 const wrap: React.CSSProperties = {
   minHeight: "100vh",
   background: "black",
@@ -677,5 +718,4 @@ const pillButtonStyle: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
-
 
