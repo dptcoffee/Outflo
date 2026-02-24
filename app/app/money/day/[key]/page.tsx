@@ -234,13 +234,13 @@ export default function DayPage() {
         color: "white",
         display: "grid",
         placeItems: "center",
-        padding: "max(24px, 6vh) 24px",
+        padding: "max(24px, 6vh) 0px",
       }}
     >
       <section
         style={{
           width: "100%",
-          maxWidth: 760,
+          maxWidth: "none",
           marginInline: "auto",
           display: "grid",
           gap: 16,
