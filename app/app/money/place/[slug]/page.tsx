@@ -1,10 +1,21 @@
-// app/money/place/[slug]/page.tsx
+/* ==========================================================
+   OUTFLO — MERCHANT RECEIPTS
+   File: app/app/money/place/[slug]/page.tsx
+   Scope: Cloud-only merchant drilldown with windowed totals
+   ========================================================== */
+
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+/* ------------------------------
+   Imports
+-------------------------------- */
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+/* ------------------------------
+   Types
+-------------------------------- */
 type Receipt = {
   id: string;
   place: string;
@@ -12,37 +23,42 @@ type Receipt = {
   ts: number; // epoch ms
 };
 
-const STORAGE_KEY = "outflo_receipts_v1";
-const BACKUP_KEY = "outflo_receipts_v1_backup";
+/* ------------------------------
+   Constants
+-------------------------------- */
+const API_RECEIPTS = "/api/receipts";
 const SYSTEM_EPOCH_KEY = "outflo_system_epoch_v1";
-
 const GLOW = "#FFFEFA";
 const DAY_MS = 24 * 60 * 60 * 1000;
+const NAV_H = 56;
 
-/* ---------------- parsing ---------------- */
+/* ------------------------------
+   Helpers
+-------------------------------- */
+function isReceipt(x: any): x is Receipt {
+  return (
+    x &&
+    typeof x.id === "string" &&
+    typeof x.place === "string" &&
+    typeof x.amount === "number" &&
+    typeof x.ts === "number"
+  );
+}
 
-function safeParseReceipts(raw: string | null): Receipt[] | null {
-  if (!raw) return null;
+function safeDecode(s: string) {
   try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-
-    const cleaned = parsed.filter(
-      (t: any) =>
-        t &&
-        typeof t.id === "string" &&
-        typeof t.place === "string" &&
-        typeof t.amount === "number" &&
-        typeof t.ts === "number"
-    );
-
-    return cleaned;
+    return decodeURIComponent(s);
   } catch {
-    return null;
+    return s;
   }
 }
 
-/* ---------------- epoch helpers ---------------- */
+function normalizeMerchant(s: string) {
+  return safeDecode(s || "")
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase();
+}
 
 function getOrCreateSystemEpoch(): number {
   try {
@@ -58,7 +74,9 @@ function getOrCreateSystemEpoch(): number {
   }
 }
 
-/* ---------------- formatting ---------------- */
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
 
 function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
@@ -81,23 +99,9 @@ function formatTime(ts: number) {
   });
 }
 
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
-/* ---------------- identity ---------------- */
-
-function slugify(s: string) {
-  return (s || "")
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-/* ---------------- avatar ---------------- */
-
+/* ------------------------------
+   Avatar
+-------------------------------- */
 function firstGlyph(place: string) {
   const s = (place || "").trim();
   for (let i = 0; i < s.length; i++) {
@@ -124,13 +128,33 @@ function avatarColors(place: string) {
   };
 }
 
-/* ---------------- component ---------------- */
+/* ------------------------------
+   API
+-------------------------------- */
+async function apiGetReceipts(): Promise<Receipt[]> {
+  const res = await fetch(API_RECEIPTS, {
+    method: "GET",
+    cache: "no-store",
+    credentials: "include",
+  });
 
+  if (!res.ok) throw new Error(`GET /api/receipts failed (${res.status})`);
+
+  const json = await res.json();
+  const receipts = Array.isArray(json?.receipts) ? json.receipts : [];
+  return receipts.filter(isReceipt);
+}
+
+/* ------------------------------
+   Component
+-------------------------------- */
 export default function PlacePage() {
   const router = useRouter();
   const params = useParams();
+
   const raw = params?.slug;
-  const slug = Array.isArray(raw) ? raw[0] : (raw ?? "");
+  const slugParam = Array.isArray(raw) ? raw[0] : (raw ?? "");
+  const slugDecoded = safeDecode(slugParam);
 
   const [loaded, setLoaded] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -142,45 +166,25 @@ export default function PlacePage() {
   }, []);
 
   useEffect(() => {
-    const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
-    if (primary) {
-      setReceipts(primary);
-      setLoaded(true);
-      return;
-    }
+    let alive = true;
 
-    const backup = safeParseReceipts(localStorage.getItem(BACKUP_KEY));
-    if (backup) {
-      setReceipts(backup);
+    (async () => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(backup));
-      } catch {}
-      setLoaded(true);
-      return;
-    }
-
-    setReceipts([]);
-    setLoaded(true);
-  }, []);
-
-  const merchantName = useMemo(() => {
-    if (!slug) return "";
-    const decoded = (() => {
-      try {
-        return decodeURIComponent(slug);
+        const rs = await apiGetReceipts();
+        if (!alive) return;
+        setReceipts(rs);
       } catch {
-        return slug;
+        // silent fail for sprint
+      } finally {
+        if (!alive) return;
+        setLoaded(true);
       }
     })();
 
-    // 1) exact slug match
-    const hit =
-      receipts.find((r) => slugify(r.place) === slugify(decoded)) ??
-      receipts.find((r) => r.place.trim().toLowerCase() === decoded.trim().toLowerCase()) ??
-      null;
-
-    return (hit?.place || decoded || "").trim();
-  }, [receipts, slug]);
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const now = Date.now();
 
@@ -198,16 +202,9 @@ export default function PlacePage() {
   }, [maxWindow]);
 
   const view = useMemo(() => {
-    const decodedSlug = (() => {
-      try {
-        return decodeURIComponent(slug);
-      } catch {
-        return slug;
-      }
-    })();
-    const targetSlug = slugify(decodedSlug);
+    const target = normalizeMerchant(slugDecoded);
 
-    const matching = receipts.filter((r) => slugify(r.place) === targetSlug);
+    const matching = receipts.filter((r) => normalizeMerchant(r.place) === target);
 
     const endMs = now;
     const startMs = endMs - windowDays * DAY_MS;
@@ -224,6 +221,7 @@ export default function PlacePage() {
     const allTotal = matching.reduce((s, r) => s + r.amount, 0);
 
     return {
+      target,
       matching,
       inWindow,
       total,
@@ -235,7 +233,12 @@ export default function PlacePage() {
       endMs,
       allTotal,
     };
-  }, [receipts, slug, windowDays, now]);
+  }, [receipts, slugDecoded, windowDays, now]);
+
+  const merchantName = useMemo(() => {
+    const hit = view.matching[0] ?? null;
+    return (hit?.place || slugDecoded || "").trim();
+  }, [view.matching, slugDecoded]);
 
   function close() {
     try {
@@ -255,7 +258,7 @@ export default function PlacePage() {
           ×
         </button>
 
-        <div style={{ width: "100%", maxWidth: 720, paddingTop: NAV_H, fontSize: 12, opacity: 0.55 }}>
+        <div style={{ width: "100%", paddingTop: NAV_H, fontSize: 12, opacity: 0.55 }}>
           Loading…
         </div>
       </main>
@@ -269,12 +272,16 @@ export default function PlacePage() {
           ×
         </button>
 
-        <div style={{ width: "100%", maxWidth: 720, paddingTop: NAV_H, display: "grid", gap: 10 }}>
+        <div style={{ width: "100%", paddingTop: NAV_H, display: "grid", gap: 10 }}>
           <div style={{ fontSize: 16, opacity: 0.9 }}>Merchant not found.</div>
           <div style={{ fontSize: 12, opacity: 0.55 }}>
-            slug: <span style={{ fontVariantNumeric: "tabular-nums" }}>{slug || "(empty)"}</span>
+            merchant:{" "}
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>
+              {(slugDecoded || "(empty)").trim()}
+            </span>
             {" · "}
-            vault: <span style={{ fontVariantNumeric: "tabular-nums" }}>{receipts.length}</span>
+            vault:{" "}
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>{receipts.length}</span>
           </div>
 
           <Link href="/app/money/receipts" style={linkPill}>
@@ -292,7 +299,9 @@ export default function PlacePage() {
       </button>
 
       <div style={frame}>
-        {/* --- HERO --- */}
+        {/* ------------------------------
+           Hero
+        -------------------------------- */}
         <section style={{ ...section, paddingTop: NAV_H }}>
           <div style={heroStack}>
             <div style={{ ...avatar, background: colors.bg, color: colors.fg }}>{glyph}</div>
@@ -317,7 +326,9 @@ export default function PlacePage() {
 
         <div style={sectionDivider} />
 
-        {/* --- WINDOW (breathing) --- */}
+        {/* ------------------------------
+           Window
+        -------------------------------- */}
         <section style={section}>
           <Title>Window</Title>
 
@@ -358,7 +369,9 @@ export default function PlacePage() {
 
         <div style={sectionDivider} />
 
-        {/* --- LEDGER --- */}
+        {/* ------------------------------
+           Ledger
+        -------------------------------- */}
         <section style={section}>
           <Title>Ledger</Title>
 
@@ -370,7 +383,9 @@ export default function PlacePage() {
 
         <div style={sectionDivider} />
 
-        {/* --- EXPLORE (hold: no links yet, but keep the surface) --- */}
+        {/* ------------------------------
+           Explore (surface only)
+        -------------------------------- */}
         <section style={section}>
           <Title>Explore</Title>
 
@@ -387,13 +402,16 @@ export default function PlacePage() {
 
           <div style={{ fontSize: 12, opacity: 0.42 }}>Coming soon.</div>
         </section>
+
+        <div style={{ fontSize: 11, opacity: 0.22 }}>Stored in cloud.</div>
       </div>
     </main>
   );
 }
 
-/* ---------------- helpers ---------------- */
-
+/* ------------------------------
+   Subcomponents
+-------------------------------- */
 function Title({ children }: { children: string }) {
   return <div style={title}>{children}</div>;
 }
@@ -423,22 +441,22 @@ function Row({
   );
 }
 
-/* ---------------- styles ---------------- */
-
-const NAV_H = 56;
-
+/* ------------------------------
+   Styles
+-------------------------------- */
 const wrap: React.CSSProperties = {
   minHeight: "100vh",
   background: "black",
   color: "white",
   display: "grid",
   placeItems: "start center",
-  padding: "max(22px, 6vh) 18px",
+  padding: "max(24px, 6vh) 0px", // match receipts page (no horizontal padding)
+  width: "100%",
 };
 
 const frame: React.CSSProperties = {
   width: "100%",
-  maxWidth: 720,
+  maxWidth: "none", // global frame owns width
   boxSizing: "border-box",
   position: "relative",
 };
