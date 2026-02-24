@@ -1,17 +1,35 @@
+/* ==========================================================
+   OUTFLO — SWIPE SHELL
+   File: components/SwipeShell.tsx
+   Scope: Global swipe navigation wrapper + bottom nav pills
+   ========================================================== */
+
 "use client";
 
+/* ------------------------------
+   Imports
+-------------------------------- */
 import { ReactNode, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSwipe } from "../hooks/useSwipe";
 
+/* ------------------------------
+   Constants
+-------------------------------- */
 const ROUTES = ["/", "/app/systems", "/time"];
 
+/* ------------------------------
+   Helpers
+-------------------------------- */
 function idxOf(pathname: string) {
   const i = ROUTES.indexOf(pathname);
   return i === -1 ? 0 : i;
 }
 
+/* ------------------------------
+   Component
+-------------------------------- */
 export default function SwipeShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -66,7 +84,11 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
             }}
           >
             <Pill href="/" active={pathname === "/"} label="Home" />
-            <Pill href="/app/systems" active={pathname === "/app/systems"} label="Systems" />
+            <Pill
+              href="/app/systems"
+              active={pathname === "/app/systems"}
+              label="Systems"
+            />
             <Pill href="/time" active={pathname === "/time"} label="Time" />
           </div>
         </nav>
@@ -75,6 +97,9 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
   );
 }
 
+/* ------------------------------
+   Subcomponents
+-------------------------------- */
 function Pill({
   href,
   label,
@@ -89,7 +114,7 @@ function Pill({
       href={href}
       style={{
         textDecoration: "none",
-        color: "white",
+        color: "white", // ✅ was black
         fontSize: 12,
         opacity: active ? 1 : 0.55,
         padding: "8px 12px",
@@ -97,6 +122,7 @@ function Pill({
         border: active
           ? "1px solid rgba(255,255,255,0.20)"
           : "1px solid transparent",
+        background: active ? "rgba(255,255,255,0.06)" : "transparent",
       }}
     >
       {label}
