@@ -528,8 +528,8 @@ const wrap: React.CSSProperties = {
   background: "black",
   color: "white",
   display: "grid",
-  placeItems: "start center",
-  padding: "max(22px, 6vh) 18px",
+  placeItems: "start stretch",
+  padding: "max(24px, 6vh) 0px", // vertical only; global frame owns horizontal
 };
 
 const frame: React.CSSProperties = {
