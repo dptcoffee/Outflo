@@ -534,7 +534,7 @@ const wrap: React.CSSProperties = {
 
 const frame: React.CSSProperties = {
   width: "100%",
-  maxWidth: 720,
+  maxWidth: "none",
   boxSizing: "border-box",
   position: "relative",
 };
