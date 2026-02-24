@@ -1,10 +1,20 @@
-/* --- IMPORTS --- */
+/* ==========================================================
+   OUTFLO — ROOT LAYOUT
+   File: app/layout.tsx
+   Scope: Global frame, metadata, and viewport contract
+   ========================================================== */
+
+/* ------------------------------
+   Imports
+-------------------------------- */
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import SwipeShell from "@/components/SwipeShell";
 
-/* --- FONTS --- */
+/* ------------------------------
+   Fonts
+-------------------------------- */
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -15,7 +25,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-/* --- METADATA (PWA) --- */
+/* ------------------------------
+   Metadata
+-------------------------------- */
 export const metadata: Metadata = {
   title: "Outflō",
   description: "Returns what leaves you",
@@ -32,12 +44,16 @@ export const metadata: Metadata = {
   },
 };
 
-/* --- VIEWPORT --- */
+/* ------------------------------
+   Viewport
+-------------------------------- */
 export const viewport: Viewport = {
   themeColor: "#0B0B0C",
 };
 
-/* --- LAYOUT --- */
+/* ------------------------------
+   Layout
+-------------------------------- */
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -46,21 +62,38 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased h-full min-h-[100dvh] w-full overflow-x-hidden`}
+        className={[
+          geistSans.variable,
+          geistMono.variable,
+          "antialiased",
+          "h-full",
+          "min-h-[100dvh]",
+          "w-full",
+          "overflow-x-hidden",
+          "bg-black",
+          "text-white",
+        ].join(" ")}
       >
         <SwipeShell>
-  {/* GLOBAL FRAME CONTRACT */}
-  <div className="min-h-[100dvh] w-full">
-    <main className="
-        w-full max-w-[520px] mx-auto py-4 box-border
-        px-[calc(16px+env(safe-area-inset-left))]
-        pr-[calc(16px+env(safe-area-inset-right))]
-      "
-    >
-      {children}
-    </main>
-  </div>
-</SwipeShell>
+          {/* GLOBAL FRAME CONTRACT */}
+          <div className="min-h-[100dvh] w-full bg-black">
+            <main
+              className={[
+                "w-full",
+                "max-w-[520px]",
+                "mx-auto",
+                "py-4",
+                "box-border",
+                "bg-black",
+                "text-white",
+                "px-[calc(16px+env(safe-area-inset-left))]",
+                "pr-[calc(16px+env(safe-area-inset-right))]",
+              ].join(" ")}
+            >
+              {children}
+            </main>
+          </div>
+        </SwipeShell>
       </body>
     </html>
   );
