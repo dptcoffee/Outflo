@@ -256,6 +256,7 @@ export default function ReceiptsPage() {
         placeItems: "center",
         padding: "max(24px, 6vh) 0px", // vertical only; global frame owns horizontal
         width: "100%",
+        maxWidth: "none",
       }}
     >
       <section
