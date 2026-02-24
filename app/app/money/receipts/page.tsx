@@ -242,7 +242,7 @@ export default function ReceiptsPage() {
   function goAdmin() {
     const pw = window.prompt("Enter admin password");
     if (pw !== "CALLIOPE") return;
-    router.push("/365/export");
+    router.push("/admin");
   }
 
   /* --- RENDER --- */
