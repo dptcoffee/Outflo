@@ -345,7 +345,7 @@ export default function ReceiptDetailPage() {
   const colors = avatarColors(receipt.place);
   const merchantName = (receipt.place || "").trim() || "Merchant";
   const exploreDate = formatExploreDate(receipt.ts);
-  const dayHref = `/app/money/day/${computed.dayKey}`;
+  const dayHref = `/app/money/day/${encodeURIComponent(computed.dayKey)}`;
 
   return (
     <main style={wrap}>
