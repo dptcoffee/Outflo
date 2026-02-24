@@ -114,7 +114,7 @@ function Pill({
       href={href}
       style={{
         textDecoration: "none",
-        color: "white", // ✅ was black
+        color: "fffefa", // ✅ was black
         fontSize: 12,
         opacity: active ? 1 : 0.55,
         padding: "8px 12px",
