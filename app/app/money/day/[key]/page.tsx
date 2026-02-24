@@ -1,12 +1,21 @@
-// app/money/day/[key]/page.tsx
+/* ==========================================================
+   OUTFLO — DAY RECEIPTS
+   File: app/app/money/day/[key]/page.tsx
+   Scope: Cloud-only day view (filter receipts by local day key)
+   ========================================================== */
+
 "use client";
 
+/* ------------------------------
+   Imports
+-------------------------------- */
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
-/* --- TYPES --- */
-
+/* ------------------------------
+   Types
+-------------------------------- */
 type Receipt = {
   id: string;
   place: string;
@@ -14,36 +23,36 @@ type Receipt = {
   ts: number; // epoch ms (truth)
 };
 
-/* --- STORAGE --- */
+/* ------------------------------
+   API
+-------------------------------- */
+const API_RECEIPTS = "/api/receipts";
 
-const STORAGE_KEY = "outflo_receipts_v1";
-const BACKUP_KEY = "outflo_receipts_v1_backup";
+async function apiGetReceipts(): Promise<Receipt[]> {
+  const res = await fetch(API_RECEIPTS, {
+    method: "GET",
+    cache: "no-store",
+    credentials: "include",
+  });
 
-/* --- PARSE --- */
+  if (!res.ok) throw new Error(`GET /api/receipts failed (${res.status})`);
 
-function safeParseReceipts(raw: string | null): Receipt[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
+  const json = await res.json();
+  const receipts = Array.isArray(json?.receipts) ? json.receipts : [];
 
-    const cleaned = parsed.filter(
-      (t: any) =>
-        t &&
-        typeof t.id === "string" &&
-        typeof t.place === "string" &&
-        typeof t.amount === "number" &&
-        typeof t.ts === "number"
-    );
-
-    return cleaned;
-  } catch {
-    return null;
-  }
+  return receipts.filter(
+    (t: any) =>
+      t &&
+      typeof t.id === "string" &&
+      typeof t.place === "string" &&
+      typeof t.amount === "number" &&
+      typeof t.ts === "number"
+  );
 }
 
-/* --- FORMAT --- */
-
+/* ------------------------------
+   Format / Compute
+-------------------------------- */
 function formatMoney(n: number) {
   return `$${n.toFixed(2)}`;
 }
@@ -87,8 +96,9 @@ function dayKeyLocal(ts: number) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/* --- CSV --- */
-
+/* ------------------------------
+   CSV
+-------------------------------- */
 function csvEscape(v: string) {
   if (v.includes('"')) v = v.replace(/"/g, '""');
   const needsQuotes =
@@ -145,29 +155,36 @@ function downloadTextFile(filename: string, content: string, mime: string) {
   } catch {}
 }
 
-/* --- PAGE --- */
-
+/* ------------------------------
+   Page
+-------------------------------- */
 export default function DayPage() {
   const params = useParams();
   const rawKey = (params as any)?.key;
-  const key = Array.isArray(rawKey) ? rawKey[0] : (rawKey ?? "");
+  const key = decodeURIComponent(Array.isArray(rawKey) ? rawKey[0] : (rawKey ?? ""));
 
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const primary = safeParseReceipts(localStorage.getItem(STORAGE_KEY));
-    if (primary) {
-      setReceipts(primary);
-      return;
-    }
+    let alive = true;
 
-    const backup = safeParseReceipts(localStorage.getItem(BACKUP_KEY));
-    if (backup) {
-      setReceipts(backup);
+    (async () => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(backup));
-      } catch {}
-    }
+        const rs = await apiGetReceipts();
+        if (!alive) return;
+        setReceipts(rs);
+      } catch {
+        // silent fail for sprint
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const dayReceipts = useMemo(() => {
@@ -230,7 +247,7 @@ export default function DayPage() {
           boxSizing: "border-box",
         }}
       >
-        {/* --- TOP ROW --- */}
+        {/* TOP ROW */}
         <div
           style={{
             display: "flex",
@@ -256,7 +273,7 @@ export default function DayPage() {
           </button>
         </div>
 
-        {/* --- HEADER --- */}
+        {/* HEADER */}
         <div style={{ display: "grid", gap: 6 }}>
           <div style={{ fontSize: 13, opacity: 0.85 }}>Day</div>
 
@@ -274,21 +291,21 @@ export default function DayPage() {
           <div style={{ fontSize: 12, opacity: 0.45 }}>
             Receipts:{" "}
             <span style={{ fontVariantNumeric: "tabular-nums" }}>
-              {dayReceipts.length}
+              {loading ? "…" : dayReceipts.length}
             </span>
           </div>
         </div>
 
-        {/* --- LIST --- */}
-        {dayReceipts.length === 0 ? (
+        {/* LIST */}
+        {loading ? (
+          <div style={{ fontSize: 12, opacity: 0.35 }}>Loading…</div>
+        ) : dayReceipts.length === 0 ? (
           <div style={{ fontSize: 12, opacity: 0.35 }}>No receipts.</div>
         ) : (
           <div style={{ display: "grid", gap: 12 }}>
             {dayReceipts.map((r) => {
               const cum = dayCumById.get(r.id);
-              const cumText = formatMoney(
-                typeof cum === "number" ? cum : r.amount
-              );
+              const cumText = formatMoney(typeof cum === "number" ? cum : r.amount);
 
               return (
                 <Link
@@ -318,9 +335,7 @@ export default function DayPage() {
                         gap: 12,
                       }}
                     >
-                      <div style={{ fontSize: 14, opacity: 0.9 }}>
-                        {r.place}
-                      </div>
+                      <div style={{ fontSize: 14, opacity: 0.9 }}>{r.place}</div>
 
                       <div
                         style={{
@@ -376,16 +391,15 @@ export default function DayPage() {
           </div>
         )}
 
-        <div style={{ fontSize: 11, opacity: 0.22 }}>
-          Stored locally. Export recommended.
-        </div>
+        <div style={{ fontSize: 11, opacity: 0.22 }}>Stored in cloud.</div>
       </section>
     </main>
   );
 }
 
-/* --- STYLES --- */
-
+/* ------------------------------
+   Styles
+-------------------------------- */
 const pillButtonStyle: React.CSSProperties = {
   background: "rgba(255,255,255,0.10)",
   border: "1px solid rgba(255,255,255,0.14)",
