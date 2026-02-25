@@ -1,20 +1,18 @@
 /* ==========================================================
    OUTFLO — LEDGER HARD RESET
    File: app/api/admin/hard-reset/route.ts
-   Scope: Cloud deletion of receipts and epoch, followed by scaffolded epoch recreation
+   Scope: Cloud deletion of receipts and epoch, followed by epoch recreation
    ========================================================== */
 
 /* ------------------------------
    Imports
 -------------------------------- */
-
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /* ------------------------------
    Route Handler
 -------------------------------- */
-
 export async function POST() {
   const supabase = await supabaseServer();
 
@@ -30,13 +28,8 @@ export async function POST() {
   const userId = user.id;
 
   /* ------------------------------
-     Delete Receipts
-  -------------------------------- */
-
-    /* ------------------------------
      Delete Receipts (authoritative)
   -------------------------------- */
-
   const { count: beforeCount, error: beforeErr } = await supabase
     .from("receipts")
     .select("id", { count: "exact", head: true })
@@ -76,11 +69,10 @@ export async function POST() {
   }
 
   /* ------------------------------
-     Delete Epoch
+     Delete Epoch (authoritative)
   -------------------------------- */
-
   const { error: delEpochErr } = await supabase
-    .from("user_system")
+    .from("user_epochs")
     .delete()
     .eq("user_id", userId);
 
@@ -89,18 +81,17 @@ export async function POST() {
   }
 
   /* ------------------------------
-     Recreate Epoch (Scaffold)
+     Recreate Epoch (authoritative)
   -------------------------------- */
+  const { error: upsertEpochErr } = await supabase
+    .from("user_epochs")
+    .upsert(
+      { user_id: userId, epoch_ms: Date.now() },
+      { onConflict: "user_id" }
+    );
 
-  const { error: insEpochErr } = await supabase
-    .from("user_system")
-    .insert({
-      user_id: userId,
-      epoch_ms: Date.now(),
-    });
-
-  if (insEpochErr) {
-    return NextResponse.json({ error: insEpochErr.message }, { status: 500 });
+  if (upsertEpochErr) {
+    return NextResponse.json({ error: upsertEpochErr.message }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
