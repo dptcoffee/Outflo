@@ -32,7 +32,7 @@ export default function LoginClient() {
 
         // If sign-in succeeds, server /login will redirect to /app on next render.
         // But we can also hard-navigate client-side for immediacy:
-        window.location.href = "/app";
+        window.location.href = "/app/systems";
         return;
       }
 

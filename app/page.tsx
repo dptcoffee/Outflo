@@ -1,17 +1,13 @@
 /* ==========================================================
    OUTFLO — PUBLIC ROOT
    File: app/page.tsx
-   Scope: "/" → Portal surface with epoch-aware ms hum
-   Rules:
-     - Logged in  → fetch cloud epoch
-     - Logged out → epochMs = null (Unix fallback in Portal)
+   Scope: "/" → Always Portal (public surface)
    ========================================================== */
 
 /* ------------------------------
    Imports
 -------------------------------- */
 import { supabaseServer } from "@/lib/supabase/server";
-import { getOrCreateUserEpochMs } from "@/lib/time/userEpoch";
 import Portal from "@/components/Portal";
 
 /* ------------------------------
@@ -24,15 +20,9 @@ export default async function Page() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let epochMs: number | null = null;
-
-  if (user) {
-    epochMs = await getOrCreateUserEpochMs();
-  }
-
-  return <Portal epochMs={epochMs} />;
+  // Public root always renders Portal
+  return <Portal epochMs={null} />;
 }
-
 
 
 
