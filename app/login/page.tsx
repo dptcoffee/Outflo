@@ -1,24 +1,14 @@
 /* ==========================================================
-   OUTFLO — LOGIN (GATED)
+   OUTFLO — LOGIN (PUBLIC)
    File: app/login/page.tsx
-   Scope: Only reachable via Portal (via=portal)
+   Scope: Public entry; redirects to /app/systems if already authed
    ========================================================== */
 
-/* ------------------------------
-   Imports
--------------------------------- */
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import LoginClient from "./login-client";
 
-/* ------------------------------
-   Page
--------------------------------- */
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
+export default async function LoginPage() {
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getUser();
 
@@ -27,14 +17,7 @@ export default async function LoginPage({
     redirect("/app/systems");
   }
 
-  // Enforce Portal pass
-  const via = searchParams?.via;
-  const pass = Array.isArray(via) ? via[0] : via;
-
-  if (pass !== "portal") {
-    redirect("/");
-  }
-
+  // Logged out → render login UI
   return <LoginClient />;
 }
 
