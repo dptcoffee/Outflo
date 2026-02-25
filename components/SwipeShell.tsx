@@ -83,7 +83,7 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
               backdropFilter: "blur(10px)",
             }}
           >
-            <Pill href="/" active={pathname === "/"} label="Home" />
+            <Pill href="/" active={pathname === "/home"} label="Home" />
             <Pill
               href="/app/systems"
               active={pathname === "/app/systems"}
