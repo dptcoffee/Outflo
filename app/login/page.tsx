@@ -14,13 +14,12 @@ export default async function LoginPage() {
 
   // Logged in → go directly to Systems
   if (data.user) {
-    redirect("/app/systems");
+    redirect("/");
   }
 
   // Logged out → render login UI
   return <LoginClient />;
 }
-
 
 
 
