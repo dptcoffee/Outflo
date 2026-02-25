@@ -1,35 +1,32 @@
+/* ==========================================================
+   OUTFLO — HOME (VAULT DOOR)
+   File: app/page.tsx
+   Scope: Public landing with vault unlock and system hum (no local epoch)
+   ========================================================== */
+
 "use client";
 
-/* --- IMPORTS --- */
+/* ------------------------------
+   Imports
+-------------------------------- */
+import type React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-/* --- CONSTANTS --- */
-const EPOCH_KEY = "outflo_app_epoch_start_v1";
+/* ------------------------------
+   Constants
+-------------------------------- */
+const DEFAULT_NEXT = "/app/systems";
 
-/* --- EPOCH --- */
-function getOrCreateEpochStart(): number {
-  try {
-    const existing = localStorage.getItem(EPOCH_KEY);
-    const parsed = existing ? Number(existing) : NaN;
-
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-
-    const now = Date.now();
-    localStorage.setItem(EPOCH_KEY, String(now));
-    return now;
-  } catch {
-    return Date.now();
-  }
-}
-
+/* ------------------------------
+   Helpers
+-------------------------------- */
 function pad13(n: number) {
   return String(Math.max(0, Math.floor(n))).padStart(13, "0");
 }
 
-/* --- VAULT --- */
 async function unlockVault(key: string) {
   const res = await fetch("/api/unlock", {
     method: "POST",
@@ -40,52 +37,56 @@ async function unlockVault(key: string) {
   return res.ok;
 }
 
-/* --- PAGE --- */
+function normalizeNextHref(nextRaw: string | null) {
+  if (!nextRaw) return DEFAULT_NEXT;
+  if (!nextRaw.startsWith("/")) return DEFAULT_NEXT;
+
+  // Block obvious loops back to public surfaces
+  if (nextRaw === "/" || nextRaw.startsWith("/login") || nextRaw.startsWith("/auth")) {
+    return DEFAULT_NEXT;
+  }
+
+  return nextRaw;
+}
+
+/* ------------------------------
+   Component
+-------------------------------- */
 export default function HomeClient() {
   const [now, setNow] = useState(() => Date.now());
-  const [anchor, setAnchor] = useState<number | null>(null);
 
   useEffect(() => {
-    setAnchor(getOrCreateEpochStart());
-
     const id = window.setInterval(() => setNow(Date.now()), 50);
     return () => window.clearInterval(id);
   }, []);
 
-  const msSinceStart = useMemo(() => {
-    if (anchor == null) return 0;
-    return now - anchor;
-  }, [now, anchor]);
-
   return (
     <main style={wrap}>
-      {/* --- BRAND --- */}
       <div style={brand}>
-        <Link href="/state" style={{ display: "inline-block" }}>
+        <Link href="/tools/gain" style={{ display: "inline-block" }}>
           <Image src="/outflo.jpg" alt="Outflō" width={320} height={320} priority />
         </Link>
       </div>
 
-      {/* --- VAULT DOOR (SUSPENSE SAFE) --- */}
       <Suspense fallback={null}>
         <VaultDoor />
       </Suspense>
 
-      {/* --- APP EPOCH HUM (13-digit zero-based ms) --- */}
-      <div style={hum}>{pad13(msSinceStart)}</div>
+      <div style={hum}>{pad13(now)}</div>
     </main>
   );
 }
 
-/* --- VAULT DOOR --- */
+/* ------------------------------
+   Subcomponents
+-------------------------------- */
 function VaultDoor() {
   const router = useRouter();
   const sp = useSearchParams();
 
   const nextHref = useMemo(() => {
-    const n = sp.get("next");
-    if (!n) return "/365/engine";
-    return n.startsWith("/") ? n : "/365/engine";
+    const raw = sp.get("next");
+    return normalizeNextHref(raw);
   }, [sp]);
 
   const [key, setKey] = useState("");
@@ -110,7 +111,12 @@ function VaultDoor() {
         return;
       }
 
-      window.location.href = nextHref;
+      // Use router if possible; fallback to hard nav for safety
+      try {
+        router.push(nextHref);
+      } catch {
+        window.location.href = nextHref;
+      }
     } catch {
       setErr("Network error.");
       setBusy(false);
@@ -136,7 +142,9 @@ function VaultDoor() {
   );
 }
 
-/* --- STYLES --- */
+/* ------------------------------
+   Styles
+-------------------------------- */
 const wrap: React.CSSProperties = {
   minHeight: "100svh",
   width: "100vw",
