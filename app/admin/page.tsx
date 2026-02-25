@@ -268,13 +268,21 @@ export default function ExportViewerPage() {
     alert("Vault cleared (soft reset).");
   }
 
-  function hardResetZeroStart() {
-    const phrase = window.prompt("Type exactly: ZERO OUTFLO");
-    if (phrase !== "ZERO OUTFLO") return;
+ async function hardResetZeroStart() {
+  const phrase = window.prompt("Type exactly: ZERO OUTFLO");
+  if (phrase !== "ZERO OUTFLO") return;
 
-    hardResetOutfloZeroStart();
-    location.href = "/";
+  try {
+    await fetch("/api/admin/hard-reset", { method: "POST" });
+  } catch (err) {
+    console.error("Hard reset failed:", err);
   }
+
+  // Optional transitional cleanup (safe to keep for now)
+  hardResetOutfloZeroStart();
+
+  location.href = "/";
+}
 
   return (
     <main
