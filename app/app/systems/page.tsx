@@ -41,7 +41,7 @@ export default function SystemsPage() {
 
         <div style={{ marginTop: 18 }}>
           <Link href="/app" style={{ color: "white", opacity: 0.7 }}>
-            ← Back
+            ← Profile
           </Link>
         </div>
       </section>
