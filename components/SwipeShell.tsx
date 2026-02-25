@@ -17,7 +17,7 @@ import { useSwipe } from "../hooks/useSwipe";
 /* ------------------------------
    Constants
 -------------------------------- */
-const ROUTES = ["/home", "/app/systems", "/time"];
+const ROUTES = ["app/home", "/app/systems", "/time"];
 
 /* ------------------------------
    Helpers
@@ -83,7 +83,7 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
               backdropFilter: "blur(10px)",
             }}
           >
-            <Pill href="/home" active={pathname === "/home"} label="Home" />
+            <Pill href="app/home" active={pathname === "app/home"} label="Home" />
             <Pill
               href="/app/systems"
               active={pathname === "/app/systems"}
