@@ -47,7 +47,7 @@ export default function Portal({
   function enter() {
     if (fading) return;
     setFading(true);
-    setTimeout(() => router.push("/app/systems"), 400);
+    setTimeout(() => router.push("/login?via=portal"), 400);
   }
 
   return (

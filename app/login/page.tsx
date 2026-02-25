@@ -14,7 +14,7 @@ export default async function LoginPage() {
 
   // Logged in → go directly to Systems
   if (data.user) {
-    redirect("/");
+    redirect("/app/systems");
   }
 
   // Logged out → render login UI
