@@ -268,20 +268,28 @@ export default function ExportViewerPage() {
     alert("Vault cleared (soft reset).");
   }
 
- async function hardResetZeroStart() {
+async function hardResetZeroStart() {
   const phrase = window.prompt("Type exactly: ZERO OUTFLO");
   if (phrase !== "ZERO OUTFLO") return;
 
+  let res: Response;
   try {
-    await fetch("/api/admin/hard-reset", { method: "POST" });
-  } catch (err) {
-    console.error("Hard reset failed:", err);
+    res = await fetch("/api/admin/hard-reset", { method: "POST" });
+  } catch {
+    alert("Hard reset failed (network).");
+    return;
   }
 
-  // Optional transitional cleanup (safe to keep for now)
+  if (!res.ok) {
+    alert(`Hard reset failed (${res.status}).`);
+    return;
+  }
+
+  // local cleanup (safe)
   hardResetOutfloZeroStart();
 
-  location.href = "/";
+  // force a clean remount of money + refetch cloud receipts
+  window.location.assign("/app/money");
 }
 
   return (

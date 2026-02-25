@@ -33,6 +33,19 @@ export async function POST() {
      Delete Receipts
   -------------------------------- */
 
+    /* ------------------------------
+     Delete Receipts (authoritative)
+  -------------------------------- */
+
+  const { count: beforeCount, error: beforeErr } = await supabase
+    .from("receipts")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  if (beforeErr) {
+    return NextResponse.json({ error: beforeErr.message }, { status: 500 });
+  }
+
   const { error: delReceiptsErr } = await supabase
     .from("receipts")
     .delete()
@@ -40,6 +53,26 @@ export async function POST() {
 
   if (delReceiptsErr) {
     return NextResponse.json({ error: delReceiptsErr.message }, { status: 500 });
+  }
+
+  const { count: afterCount, error: afterErr } = await supabase
+    .from("receipts")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  if (afterErr) {
+    return NextResponse.json({ error: afterErr.message }, { status: 500 });
+  }
+
+  if ((afterCount ?? 0) !== 0) {
+    return NextResponse.json(
+      {
+        error: "Hard reset failed: receipts still present after delete.",
+        beforeCount: beforeCount ?? 0,
+        afterCount: afterCount ?? 0,
+      },
+      { status: 500 }
+    );
   }
 
   /* ------------------------------
