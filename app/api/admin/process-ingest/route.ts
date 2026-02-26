@@ -1,7 +1,7 @@
 /* ==========================================================
-   OUTFLO — ADMIN INGEST PROCESSOR
+   OUTFLO — PROCESS INGEST EVENTS
    File: app/api/admin/process-ingest/route.ts
-   Scope: Convert bound ingest_events into receipts for a single user (idempotent)
+   Scope: Bind ingest_events → user via ingest_aliases and upsert into receipts; mark ingest_events.processed_at
    ========================================================== */
 
 /* ------------------------------
@@ -13,19 +13,21 @@ import { createClient } from "@supabase/supabase-js";
 /* ------------------------------
    Types
 -------------------------------- */
-type ProcessRequestBody = {
-  user_id: string; // required (Scope C)
-  limit?: number; // optional
-};
-
 type IngestEventRow = {
   id: string; // uuid
-  user_id: string; // uuid (bound)
-  provider: string;
-  event_id: string | null;
-  message_id: string | null;
-  received_at: string; // timestamptz
+  provider: string | null;
+  received_at: string | null; // timestamptz
+  message_id: string | null; // provider email id
+  event_id: string | null; // webhook event id
+  user_id: string | null; // bound user
+  processed_at: string | null; // timestamptz
   raw: any; // jsonb
+};
+
+type AliasRow = {
+  user_id: string;
+  is_active: boolean;
+  type: string | null;
 };
 
 type DbErrorLike = {
@@ -42,7 +44,6 @@ export const runtime = "nodejs";
 
 const PROVIDER = "resend";
 const DEFAULT_LIMIT = 25;
-const MAX_LIMIT = 250;
 
 /* ------------------------------
    Helpers
@@ -50,48 +51,16 @@ const MAX_LIMIT = 250;
 function envOrNull(key: string): string | null {
   const v = process.env[key];
   if (!v) return null;
-  const trimmed = v.trim();
-  return trimmed.length ? trimmed : null;
+  const t = v.trim();
+  return t.length ? t : null;
 }
 
-function uuidLike(v: string): boolean {
-  // Good-enough UUID v4-ish check for admin input validation
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+function isoNow(): string {
+  return new Date().toISOString();
 }
 
-function clampLimit(v: unknown): number {
-  const n = typeof v === "number" ? v : Number(v);
-  if (!Number.isFinite(n)) return DEFAULT_LIMIT;
-  const rounded = Math.floor(n);
-  if (rounded < 1) return 1;
-  if (rounded > MAX_LIMIT) return MAX_LIMIT;
-  return rounded;
-}
-
-function safeJson<T>(raw: string): { ok: true; value: T } | { ok: false; error: string } {
-  try {
-    return { ok: true, value: JSON.parse(raw) as T };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "invalid json" };
-  }
-}
-
-function toEpochMs(iso: string): number {
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return Date.now();
-  return t;
-}
-
-function pickPlace(ev: IngestEventRow): string {
-  // For now: Subject is the cleanest deterministic “place” proxy.
-  const subject = ev?.raw?.data?.subject;
-  if (typeof subject === "string" && subject.trim().length) return subject.trim();
-
-  // Fallbacks (still deterministic)
-  const from = ev?.raw?.data?.from;
-  if (typeof from === "string" && from.trim().length) return from.trim();
-
-  return "Unknown";
+function bad(status: number, payload: any) {
+  return NextResponse.json(payload, { status });
 }
 
 function supabaseService() {
@@ -108,151 +77,260 @@ function supabaseService() {
   };
 }
 
-function requireVaultKey(req: Request): { ok: true } | { ok: false; status: number; message: string } {
-  const expected = envOrNull("OUTFLO_VAULT_KEY");
-  if (!expected) {
-    return { ok: false, status: 500, message: "Missing OUTFLO_VAULT_KEY" };
+function getVaultKey(req: Request): string | null {
+  const h = req.headers.get("x-outflo-vault-key");
+  if (!h) return null;
+  const t = h.trim();
+  return t.length ? t : null;
+}
+
+function mustInt(v: string | null, fallback: number): number {
+  if (!v) return fallback;
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return n;
+}
+
+function extractLocalPartFromRaw(raw: any): string | null {
+  const from = raw?.data?.from;
+  if (typeof from !== "string") return null;
+
+  // from may be "Name <user@domain.com>" or "user@domain.com"
+  const m = from.match(/<([^>]+)>/);
+  const addr = (m ? m[1] : from).trim().toLowerCase();
+  const at = addr.indexOf("@");
+  if (at <= 0) return null;
+
+  const local = addr.slice(0, at).trim();
+  return local.length ? local : null;
+}
+
+function extractReceiptPlace(raw: any): string {
+  const subject = raw?.data?.subject;
+  if (typeof subject === "string" && subject.trim().length) return subject.trim();
+
+  // fallback: provider type label
+  const type = raw?.type;
+  if (typeof type === "string" && type.trim().length) return type.trim();
+
+  return "ingest";
+}
+
+function extractReceiptTsMs(ev: IngestEventRow): number {
+  // truth preference: provider received_at (timestamptz)
+  if (ev.received_at) {
+    const ms = Date.parse(ev.received_at);
+    if (Number.isFinite(ms)) return ms;
   }
+  return Date.now();
+}
 
-  const got =
-    req.headers.get("x-outflo-vault-key") ||
-    req.headers.get("x-outflo-vault") ||
-    req.headers.get("authorization");
-
-  if (!got) return { ok: false, status: 401, message: "Missing vault key" };
-
-  // Allow either raw key or "Bearer <key>"
-  const normalized = got.startsWith("Bearer ") ? got.slice("Bearer ".length).trim() : got.trim();
-  if (normalized !== expected) return { ok: false, status: 403, message: "Invalid vault key" };
-
-  return { ok: true };
+function extractReceiptAmount(raw: any): number {
+  // We do NOT have real spend parsing yet; pipe test = 0.
+  // If you later add parsing, do it here.
+  const n = 0;
+  return n;
 }
 
 /* ------------------------------
    Handler
 -------------------------------- */
 export async function POST(req: Request) {
-  // 0) Auth
-  const auth = requireVaultKey(req);
-  if (!auth.ok) return NextResponse.json({ ok: false, where: "auth", message: auth.message }, { status: auth.status });
+  /* ------------------------------
+     Auth
+  -------------------------------- */
+  const expectedVault = envOrNull("OUTFLO_VAULT_KEY");
+  const providedVault = getVaultKey(req);
 
-  // 1) Supabase
-  const svc = supabaseService();
-  if (!svc.ok) {
-    return NextResponse.json({ ok: false, where: svc.where, message: svc.message }, { status: 500 });
+  if (expectedVault) {
+    if (!providedVault || providedVault !== expectedVault) {
+      return bad(401, { ok: false, where: "auth", message: "Invalid vault key" });
+    }
+  } else {
+    // If you haven't set OUTFLO_VAULT_KEY yet, we refuse to run this admin endpoint.
+    return bad(500, { ok: false, where: "env", message: "Missing OUTFLO_VAULT_KEY" });
   }
+
+  /* ------------------------------
+     Supabase
+  -------------------------------- */
+  const svc = supabaseService();
+  if (!svc.ok) return bad(500, { ok: false, where: svc.where, message: svc.message });
   const supabase = svc.client;
 
-  // 2) Parse body
-  const rawText = await req.text();
-  const parsed = safeJson<ProcessRequestBody>(rawText || "{}");
-  if (!parsed.ok) {
-    return NextResponse.json(
-      { ok: false, where: "payload", message: `Invalid JSON: ${parsed.error}` },
-      { status: 400 }
-    );
-  }
+  /* ------------------------------
+     Params
+  -------------------------------- */
+  const url = new URL(req.url);
+  const limit = mustInt(url.searchParams.get("limit"), DEFAULT_LIMIT);
 
-  const body = parsed.value;
-  const user_id = (body?.user_id || "").trim();
-  const limit = clampLimit(body?.limit);
-
-  if (!user_id || !uuidLike(user_id)) {
-    return NextResponse.json(
-      { ok: false, where: "payload", message: "user_id is required and must be a UUID" },
-      { status: 400 }
-    );
-  }
-
-  // 3) Load ingest_events (already bound to user_id by ingest v2)
-  // NOTE: We intentionally do NOT rely on processed_at/receipt_id columns.
-  // Idempotency is achieved by using ingest_events.id as receipts.id (PK).
-  const { data: events, error: evErr } = await supabase
+  /* ------------------------------
+     Fetch unprocessed ingest events
+  -------------------------------- */
+  const { data: events, error: fetchErr } = await supabase
     .from("ingest_events")
-    .select("id,user_id,provider,event_id,message_id,received_at,raw")
+    .select("id, provider, received_at, message_id, event_id, user_id, processed_at, raw")
     .eq("provider", PROVIDER)
-    .eq("user_id", user_id)
+    .is("processed_at", null)
     .order("received_at", { ascending: true })
     .limit(limit);
 
-  if (evErr) {
-    const e = evErr as unknown as DbErrorLike;
-    return NextResponse.json(
-      { ok: false, where: "db", message: e.message || "Failed to read ingest_events", code: e.code || null },
-      { status: 500 }
-    );
+  if (fetchErr) {
+    return bad(500, {
+      ok: false,
+      where: "db",
+      message: fetchErr.message,
+      step: "fetch_events",
+    });
   }
 
   const rows = (events || []) as IngestEventRow[];
-  if (!rows.length) {
-    return NextResponse.json(
-      { ok: true, processed: 0, deduped: 0, message: "No ingest_events found for user/provider" },
-      { status: 200 }
-    );
-  }
 
-  // 4) Convert -> receipts (Amount Strategy A: always 0 for now)
-  // Idempotent rule:
-  // - receipts.id := ingest_events.id (uuid)
-  // - upsert onConflict: "id" with ignoreDuplicates
-  let processed = 0;
+  /* ------------------------------
+     Process
+  -------------------------------- */
+  let scanned = 0;
+  let bound = 0;
+  let inserted = 0;
   let deduped = 0;
+  let processed = 0;
 
   for (const ev of rows) {
-    const ts = toEpochMs(ev.received_at);
-    const place = pickPlace(ev);
+    scanned += 1;
 
-    const receipt = {
-      id: ev.id,
-      user_id: ev.user_id,
-      ts,
-      place,
-      amount: 0,
-      raw: {
-        source: "ingest",
-        provider: ev.provider,
-        event_id: ev.event_id,
-        message_id: ev.message_id,
-        received_at: ev.received_at,
-        payload: ev.raw,
-      },
-    };
+    // 1) Ensure user_id is bound (via alias lookup)
+    let userId = ev.user_id;
 
-    const { error: insErr } = await supabase
-      .from("receipts")
-      .upsert(receipt, { onConflict: "id", ignoreDuplicates: true });
+    if (!userId) {
+      const localPart = extractLocalPartFromRaw(ev.raw);
 
-    if (insErr) {
-      const e = insErr as unknown as DbErrorLike;
-      return NextResponse.json(
-        {
-          ok: false,
-          where: "db",
-          message: e.message || "Failed to write receipts",
-          code: e.code || null,
-          event_id: ev.event_id,
-          ingest_event_id: ev.id,
-        },
-        { status: 500 }
-      );
+      if (localPart) {
+        const { data: alias, error: aliasErr } = await supabase
+          .from("ingest_aliases")
+          .select("user_id, is_active, type")
+          .eq("local_part", localPart)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (aliasErr) {
+          return bad(500, {
+            ok: false,
+            where: "db",
+            message: aliasErr.message,
+            step: "lookup_alias",
+            local_part: localPart,
+          });
+        }
+
+        const a = alias as AliasRow | null;
+        if (a?.user_id) {
+          userId = a.user_id;
+
+          const { error: bindErr } = await supabase
+            .from("ingest_events")
+            // cast to avoid TS complaining if your generated types lag schema changes
+            .update({ user_id: userId } as any)
+            .eq("id", ev.id);
+
+          if (bindErr) {
+            return bad(500, {
+              ok: false,
+              where: "db",
+              message: bindErr.message,
+              step: "bind_user",
+            });
+          }
+
+          bound += 1;
+        }
+      }
     }
 
-    // We can’t perfectly know whether this particular row inserted or was deduped
-    // without a select/returning on every upsert.
-    // So we do a cheap heuristic: treat all as "processed" for this run,
-    // and expose that dedupe is guaranteed by primary key conflict behavior.
+    // If still no user, we do NOT process (leave it unprocessed for later binding)
+    if (!userId) continue;
+
+    // 2) Build receipt row (pipe-test minimal)
+    const receiptId = ev.id; // idempotent: 1 ingest_event => 1 receipt
+    const ts = extractReceiptTsMs(ev);
+    const place = extractReceiptPlace(ev.raw);
+    const amount = extractReceiptAmount(ev.raw);
+    const raw = {
+      source: "ingest",
+      provider: ev.provider,
+      event_id: ev.event_id,
+      message_id: ev.message_id,
+      received_at: ev.received_at,
+      payload: ev.raw,
+    };
+
+    // 3) Upsert into receipts (idempotent on id)
+    const { error: upsertErr } = await supabase
+      .from("receipts")
+      .upsert(
+        {
+          id: receiptId,
+          user_id: userId,
+          ts,
+          place,
+          amount,
+          raw,
+        } as any,
+        { onConflict: "id" }
+      );
+
+    if (upsertErr) {
+      const e = upsertErr as unknown as DbErrorLike;
+
+      // If the row already exists and upsert still errors for a constraint,
+      // treat as hard failure (we want clean law).
+      return bad(500, {
+        ok: false,
+        where: "db",
+        message: e.message || "Receipt upsert failed",
+        code: e.code || null,
+        step: "upsert_receipt",
+      });
+    }
+
+    // We can’t perfectly know insert vs update here; treat as inserted for now.
+    inserted += 1;
+
+    // 4) Mark ingest event processed
+    const processedAt = isoNow();
+
+    const { error: markErr } = await supabase
+      .from("ingest_events")
+      .update({ processed_at: processedAt } as any)
+      .eq("id", ev.id);
+
+    if (markErr) {
+      return bad(500, {
+        ok: false,
+        where: "db",
+        message: markErr.message,
+        step: "mark_processed",
+      });
+    }
+
     processed += 1;
   }
 
+  /* ------------------------------
+     Response
+  -------------------------------- */
   return NextResponse.json(
     {
       ok: true,
-      processed,
-      deduped,
-      user_id,
       provider: PROVIDER,
       limit,
-      version: "process-ingest-v1-receipts-idempotent",
+      scanned,
+      bound,
+      inserted,
+      deduped,
+      processed,
+      version: "process-ingest-v1",
       note: "Idempotent via receipts.id = ingest_events.id (PK conflict => no duplicate receipts).",
     },
     { status: 200 }
