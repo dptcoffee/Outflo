@@ -1,7 +1,7 @@
 /* ==========================================================
    OUTFLO — RESEND INGEST WEBHOOK
    File: app/api/ingest/resend/route.ts
-   Scope: Receive Resend webhook events and persist to ingest_events (idempotent)
+   Scope: Receive Resend webhook events and persist to ingest_events (idempotent + user-bound via ingest_aliases)
    ========================================================== */
 
 /* ------------------------------
@@ -14,16 +14,15 @@ import { createClient } from "@supabase/supabase-js";
    Types
 -------------------------------- */
 type ResendWebhookPayload = {
-  id?: string; // webhook event id (often msg_...)
-  type?: string; // e.g., "email.received"
+  id?: string; // resend event id (msg_...)
+  type?: string; // e.g. "email.received"
   created_at?: string; // ISO string
   data?: {
-    // Resend payload commonly includes:
-    email_id?: string; // actual email id (uuid-ish)
+    email_id?: string; // resend email uuid (stable)
+    message_id?: string; // RFC message-id, e.g. "<CAB...@mail...>"
     from?: string;
     to?: string[];
     subject?: string;
-    // plus many other fields we store in raw
     [key: string]: any;
   };
   [key: string]: any;
@@ -53,7 +52,9 @@ function envOrNull(key: string): string | null {
   return trimmed.length ? trimmed : null;
 }
 
-function safeJsonParse<T>(raw: string): { ok: true; value: T } | { ok: false; error: string } {
+function safeJsonParse<T>(
+  raw: string
+): { ok: true; value: T } | { ok: false; error: string } {
   try {
     return { ok: true, value: JSON.parse(raw) as T };
   } catch (e: any) {
@@ -66,21 +67,15 @@ function isoNow(): string {
 }
 
 function pickReceivedAt(payload: ResendWebhookPayload): string {
-  // Prefer provider timestamp if present, otherwise now.
-  // Resend tends to provide created_at at top-level.
   if (payload?.created_at && typeof payload.created_at === "string") return payload.created_at;
+  if (payload?.data?.created_at && typeof (payload as any).data.created_at === "string")
+    return (payload as any).data.created_at;
   return isoNow();
 }
 
 function extractEventId(payload: ResendWebhookPayload): string | null {
-  // We want a stable idempotency key for the webhook delivery.
-  // Prefer payload.id. Fall back to a few known places.
-  const candidates = [
-    payload?.id,
-    (payload as any)?.data?.id,
-    payload?.data?.email_id, // last-resort fallback (still better than null)
-  ];
-
+  // Prefer stable resend email uuid for idempotency; fallback to webhook id.
+  const candidates = [payload?.data?.email_id, payload?.id];
   for (const c of candidates) {
     if (typeof c === "string" && c.trim().length) return c.trim();
   }
@@ -88,10 +83,25 @@ function extractEventId(payload: ResendWebhookPayload): string | null {
 }
 
 function extractMessageId(payload: ResendWebhookPayload): string | null {
-  // This identifies the actual email entity (not the webhook event).
-  const v = payload?.data?.email_id;
+  // Store RFC message-id if present (different from email_id).
+  const v = payload?.data?.message_id;
   if (typeof v === "string" && v.trim().length) return v.trim();
   return null;
+}
+
+function extractToAddress(payload: ResendWebhookPayload): string | null {
+  const to = payload?.data?.to;
+  if (Array.isArray(to) && typeof to[0] === "string" && to[0].trim().length) {
+    return to[0].trim().toLowerCase();
+  }
+  return null;
+}
+
+function localPartFromEmail(addr: string): string | null {
+  const at = addr.indexOf("@");
+  if (at <= 0) return null;
+  const local = addr.slice(0, at).trim().toLowerCase();
+  return local.length ? local : null;
 }
 
 function supabaseService() {
@@ -121,7 +131,7 @@ export async function POST(req: Request) {
   }
   const supabase = svc.client;
 
-  // 2) Read body (raw text first, then JSON)
+  // 2) Read body
   const rawText = await req.text();
   const parsed = safeJsonParse<ResendWebhookPayload>(rawText);
 
@@ -134,20 +144,65 @@ export async function POST(req: Request) {
 
   const payload = parsed.value;
 
-  // 3) Extract ids
+  // 3) Extract ids + recipient local_part
   const event_id = extractEventId(payload);
   const message_id = extractMessageId(payload);
   const received_at = pickReceivedAt(payload);
 
   if (!event_id) {
     return NextResponse.json(
-      { ok: false, where: "payload", message: "Missing event_id (payload.id)" },
+      { ok: false, where: "payload", message: "Missing event_id (expected data.email_id or payload.id)" },
       { status: 400 }
     );
   }
 
-  // 4) Insert (idempotent on event_id)
-  const { data, error } = await supabase
+  const toAddr = extractToAddress(payload);
+  if (!toAddr) {
+    return NextResponse.json(
+      { ok: false, where: "payload", message: "Missing recipient (expected data.to[0])" },
+      { status: 400 }
+    );
+  }
+
+  const local_part = localPartFromEmail(toAddr);
+  if (!local_part) {
+    return NextResponse.json(
+      { ok: false, where: "payload", message: `Invalid recipient address: ${toAddr}` },
+      { status: 400 }
+    );
+  }
+
+  // 4) Resolve user_id from ingest_aliases (canonical binding)
+  const { data: aliasRow, error: aliasErr } = await supabase
+    .from("ingest_aliases")
+    .select("user_id")
+    .eq("local_part", local_part)
+    .eq("is_active", true)
+    .single();
+
+  if (aliasErr) {
+    const e = aliasErr as unknown as DbErrorLike;
+    return NextResponse.json(
+      {
+        ok: false,
+        where: "db",
+        message: e.message || "Alias lookup failed",
+        code: e.code || null,
+      },
+      { status: 500 }
+    );
+  }
+
+  const user_id = aliasRow?.user_id as string | null;
+  if (!user_id) {
+    return NextResponse.json(
+      { ok: false, where: "alias", message: `No active alias found for local_part: ${local_part}` },
+      { status: 400 }
+    );
+  }
+
+  // 5) Insert ingest event (idempotent on event_id)
+  const { data: ins, error: insErr } = await supabase
     .from("ingest_events")
     .insert({
       provider: PROVIDER,
@@ -155,26 +210,28 @@ export async function POST(req: Request) {
       message_id, // nullable
       received_at,
       raw: payload, // jsonb
-      user_id: null, // resolved later via alias
+      user_id, // resolved now
     })
     .select("id")
     .single();
 
-  if (error) {
-    const e = error as unknown as DbErrorLike;
+  if (insErr) {
+    const e = insErr as unknown as DbErrorLike;
 
-    // Unique violation on event_id => safe retry / dedupe
+    // Unique violation => dedupe ok
     if (e.code === "23505") {
       return NextResponse.json({ ok: true, deduped: true, event_id }, { status: 200 });
     }
 
-    // Any other DB failure => 500
     return NextResponse.json(
       { ok: false, where: "db", message: e.message || "DB insert failed", code: e.code || null },
       { status: 500 }
     );
   }
 
-  // 5) Success
-  return NextResponse.json({ ok: true, inserted_id: data.id, event_id }, { status: 200 });
+  // 6) Success
+  return NextResponse.json(
+    { ok: true, inserted_id: ins.id, event_id, local_part, user_id },
+    { status: 200 }
+  );
 }
