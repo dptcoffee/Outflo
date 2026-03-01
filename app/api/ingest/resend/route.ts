@@ -328,39 +328,37 @@ export async function POST(req: Request) {
     );
   }
 
-  /* ------------------------------
-     CashApp Enrichment
-  -------------------------------- */
-  const from = payload?.data?.from;
-  const subject = payload?.data?.subject;
+/* ------------------------------
+   CashApp Enrichment
+-------------------------------- */
+const from = payload?.data?.from;
+const subject = payload?.data?.subject;
 
-  const isCashApp =
-    typeof from === "string" && /(cash\.app|square\.com)/i.test(from);
+const isCashApp =
+  typeof from === "string" && /(cash\.app|square\.com)/i.test(from);
 
-  if (isCashApp) {
-    const parsedCash = parseCashAppSubject(subject);
+if (isCashApp) {
+  const parsedCash = parseCashAppSubject(subject);
 
-    // only overwrite stub zeros; keep idempotent behavior
-    if (parsedCash?.direction === "out") {
-      await supabase
-        .from("receipts")
-        .update({
-          amount: parsedCash.amount,
-          place: parsedCash.place,
-        } as any)
-        .eq("id", ingest_id)
-        .eq("amount", 0);
-    }
+  if (parsedCash?.place) {
+    await supabase
+      .from("receipts")
+      .update({
+        ...(parsedCash.amount != null ? { amount: parsedCash.amount } : {}),
+        place: parsedCash.place,
+      } as any)
+      .eq("id", ingest_id);
   }
+}
 
-  return NextResponse.json(
-    {
-      ok: true,
-      receipt_id: ingest_id,
-      event_id,
-      user_id,
-      version: VERSION,
-    },
-    { status: 200 }
-  );
+return NextResponse.json(
+  {
+    ok: true,
+    receipt_id: ingest_id,
+    event_id,
+    user_id,
+    version: VERSION,
+  },
+  { status: 200 }
+);
 }
