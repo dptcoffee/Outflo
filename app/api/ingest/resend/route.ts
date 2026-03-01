@@ -313,35 +313,39 @@ export async function POST(req: Request) {
     );
   }
 
-  /* ------------------------------
-     CashApp Enrichment
-  -------------------------------- */
-  const from = payload?.data?.from;
-  const subject = payload?.data?.subject;
+/* ------------------------------
+   CashApp Enrichment
+-------------------------------- */
+const from = payload?.data?.from;
+const subject = payload?.data?.subject;
 
-  if (typeof from === "string" && from.toLowerCase().includes("cash.app")) {
-    const parsedCash = parseCashAppSubject(subject);
+const isCashApp =
+  typeof from === "string" &&
+  /(cash\.app|square\.com)/i.test(from);
 
-    if (parsedCash && parsedCash.direction === "out") {
-      await supabase
-        .from("receipts")
-        .update({
-          amount: parsedCash.amount,
-          place: parsedCash.place,
-        } as any)
-        .eq("id", ingest_id)
-        .eq("amount", 0);
-    }
+if (isCashApp) {
+  const parsedCash = parseCashAppSubject(subject);
+
+  if (parsedCash?.direction === "out") {
+    await supabase
+      .from("receipts")
+      .update({
+        amount: parsedCash.amount,
+        place: parsedCash.place,
+      } as any)
+      .eq("id", ingest_id)
+      .eq("amount", 0);
   }
+}
 
-  return NextResponse.json(
-    {
-      ok: true,
-      receipt_id: ingest_id,
-      event_id,
-      user_id,
-      version: VERSION,
-    },
-    { status: 200 }
-  );
+return NextResponse.json(
+  {
+    ok: true,
+    receipt_id: ingest_id,
+    event_id,
+    user_id,
+    version: VERSION,
+  },
+  { status: 200 }
+);
 }
