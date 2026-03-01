@@ -74,15 +74,6 @@ function formatHeroDateTime(ts: number) {
   return `${date} · ${time}`;
 }
 
-function formatExploreDate(ts: number) {
-  const d = new Date(ts);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 function formatTime24WithSeconds(ts: number) {
   const d = new Date(ts);
   const hh = String(d.getHours()).padStart(2, "0");
@@ -153,6 +144,34 @@ function avatarColors(place: string) {
   };
 }
 
+function normalizeMerchantKey(place: string) {
+  return (place || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[’']/g, "")
+    .replace(/[.]/g, "")
+    .replace(/&/g, "and");
+}
+
+function logoUrlFor(place: string) {
+  const key = normalizeMerchantKey(place);
+
+  // Minimal seed map (expand over time)
+  const MAP: Record<string, string> = {
+    "7-eleven": "7-eleven.com",
+    "amazon": "amazon.com",
+    "t-mobile": "t-mobile.com",
+    "tmobile": "t-mobile.com",
+    "starbucks": "starbucks.com",
+    "walmart": "walmart.com",
+    "target": "target.com",
+  };
+
+  const domain = MAP[key] ?? null;
+  return domain ? `https://logo.clearbit.com/${domain}` : null;
+}
+
 /* ------------------------------
    Component
 -------------------------------- */
@@ -166,6 +185,7 @@ export default function ReceiptDetailPage() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [systemEpoch, setSystemEpoch] = useState<number | null>(null);
+  const [logoOk, setLogoOk] = useState(true);
 
   useEffect(() => {
     setSystemEpoch(getOrCreateSystemEpoch());
@@ -341,11 +361,19 @@ export default function ReceiptDetailPage() {
     );
   }
 
-  const glyph = firstGlyph(receipt.place);
-  const colors = avatarColors(receipt.place);
   const merchantName = (receipt.place || "").trim() || "Merchant";
-  const exploreDate = formatExploreDate(receipt.ts);
+  const glyph = firstGlyph(merchantName);
+  const colors = avatarColors(merchantName);
+
+  const logoUrl = logoUrlFor(merchantName);
+
   const dayHref = `/app/money/day/${encodeURIComponent(computed.dayKey)}`;
+  const placeHref = `/app/money/place/${encodeURIComponent(merchantName)}`;
+
+  const heroAmount =
+    Number.isFinite(receipt.amount) && receipt.amount > 0
+      ? formatMoney(receipt.amount)
+      : "—";
 
   return (
     <main style={wrap}>
@@ -360,7 +388,25 @@ export default function ReceiptDetailPage() {
         <section style={{ ...section, paddingTop: NAV_H }}>
           <div style={heroStack}>
             <div style={{ ...avatar, background: colors.bg, color: colors.fg }}>
-              {glyph}
+              {logoUrl && logoOk ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoUrl}
+                  alt={merchantName}
+                  width={54}
+                  height={54}
+                  style={{
+                    width: 54,
+                    height: 54,
+                    borderRadius: 999,
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                  onError={() => setLogoOk(false)}
+                />
+              ) : (
+                glyph
+              )}
             </div>
 
             <div style={heroInfo}>
@@ -370,7 +416,7 @@ export default function ReceiptDetailPage() {
               <div style={metaLine}>{formatHeroDateTime(receipt.ts)}</div>
             </div>
 
-            <div style={amount}>{formatMoney(receipt.amount)}</div>
+            <div style={amount}>{heroAmount}</div>
           </div>
         </section>
 
@@ -383,20 +429,23 @@ export default function ReceiptDetailPage() {
           <Title>Position</Title>
 
           <div style={rows}>
-            <Row
-              label="Day cumulative (at this moment)"
-              value={formatMoney(computed.dayCum)}
-            />
-            <Row
-              label="365 rolling total (at this moment)"
-              value={formatMoney(computed.total365)}
-            />
-            <Row
-              label="Index in day"
-              value={`${computed.dayIndex} of ${computed.dayCount}`}
-              mono
-            />
+            <Row label="Day" value={computed.dayKey} mono />
+            <Row label="Orbit" value={formatMoney(computed.dayCum)} />
+            <Row label="Index" value={String(computed.dayIndex)} mono />
+          </div>
+        </section>
+
+        <div style={sectionDivider} />
+
+        {/* ------------------------------
+           Orientation
+        -------------------------------- */}
+        <section style={section}>
+          <Title>Orientation</Title>
+
+          <div style={rows}>
             <Row label="City, State" value="Miami, FL" />
+            <Row label="Weather" value="—" />
           </div>
         </section>
 
@@ -411,18 +460,18 @@ export default function ReceiptDetailPage() {
           <div style={rows}>
             <Row label="Receipt ID" value={`#${receiptSuffix(receipt.id)}`} mono />
             <Row
-              label="Time (24h + seconds)"
+              label="Raw time (24h + seconds)"
               value={formatTime24WithSeconds(receipt.ts)}
               mono
             />
-            <Row label="Epoch time (ms)" value={String(receipt.ts)} mono />
-            <Row label="User epoch time" value={userEpochTime} mono />
+            <Row label="Epoch" value={String(receipt.ts)} mono />
+            <Row label="User Epoch" value={userEpochTime} mono />
             <Row
-              label="Latitude / Longitude"
+              label="Coordinates"
               value={`${LAT_33133}, ${LNG_33133}`}
               mono
             />
-            <Row label="Payment method" value="coming soon" />
+            <Row label="Payment rail" value="Cash App" />
           </div>
         </section>
 
@@ -435,12 +484,9 @@ export default function ReceiptDetailPage() {
           <Title>Explore</Title>
 
           <div style={menu}>
+            <MenuItem href={dayHref} label="See all transactions for this day" />
             <MenuItem
-              href={dayHref}
-              label={`See all your transactions for ${exploreDate}`}
-            />
-            <MenuItem
-              href={`/app/money/place/${encodeURIComponent(merchantName)}`}
+              href={placeHref}
               label={`View your ${merchantName} transactions across time`}
             />
             <MenuItem href="/app/money/about" label="Learn how the Engine works" />
@@ -461,7 +507,7 @@ export default function ReceiptDetailPage() {
           <div style={{ height: 14 }} />
 
           <Link href="/" style={footerLink}>
-            outflo.is
+            outflo.xyz
           </Link>
         </section>
       </div>
@@ -583,6 +629,7 @@ const avatar: React.CSSProperties = {
   fontSize: 20,
   fontWeight: 750,
   userSelect: "none",
+  overflow: "hidden",
 };
 
 const heroInfo: React.CSSProperties = {
@@ -595,7 +642,7 @@ const merchant: React.CSSProperties = {
   fontSize: 22,
   fontWeight: 650,
   letterSpacing: "-0.02em",
-  opacity: 0.92,
+  color: "var(--text-secondary)",
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -603,7 +650,7 @@ const merchant: React.CSSProperties = {
 
 const metaLine: React.CSSProperties = {
   fontSize: 12,
-  opacity: 0.58,
+  color: "var(--text-secondary)",
   letterSpacing: "0.02em",
 };
 
@@ -638,7 +685,7 @@ const row: React.CSSProperties = {
 
 const rowLabel: React.CSSProperties = {
   fontSize: 14,
-  opacity: 0.55,
+  color: "var(--text-secondary)",
 };
 
 const rowValue: React.CSSProperties = {
