@@ -110,14 +110,21 @@ function receivedAtToTsMs(received_at: string): number {
 
 function supabaseService() {
   const url =
-    envOrNull("SUPABASE_URL") ||
-    envOrNull("NEXT_PUBLIC_SUPABASE_URL");
+    envOrNull("SUPABASE_URL") || envOrNull("NEXT_PUBLIC_SUPABASE_URL");
   const key = envOrNull("SUPABASE_SERVICE_ROLE_KEY");
 
   if (!url)
-    return { ok: false as const, where: "env" as const, message: "Missing SUPABASE_URL" };
+    return {
+      ok: false as const,
+      where: "env" as const,
+      message: "Missing SUPABASE_URL",
+    };
   if (!key)
-    return { ok: false as const, where: "env" as const, message: "Missing SUPABASE_SERVICE_ROLE_KEY" };
+    return {
+      ok: false as const,
+      where: "env" as const,
+      message: "Missing SUPABASE_SERVICE_ROLE_KEY",
+    };
 
   return {
     ok: true as const,
@@ -134,20 +141,22 @@ function parseCashAppSubject(subject: string | undefined) {
   const spentMatch = subject.match(/You spent \$([0-9]+\.[0-9]{2}) at (.+)$/i);
   if (spentMatch) {
     return {
-      direction: "out",
+      direction: "out" as const,
       amount: parseFloat(spentMatch[1]),
       place: spentMatch[2].trim(),
-      confidence: "high",
+      confidence: "high" as const,
     };
   }
 
-  const receivedMatch = subject.match(/You received \$([0-9]+\.[0-9]{2}) from (.+)$/i);
+  const receivedMatch = subject.match(
+    /You received \$([0-9]+\.[0-9]{2}) from (.+)$/i
+  );
   if (receivedMatch) {
     return {
-      direction: "in",
+      direction: "in" as const,
       amount: parseFloat(receivedMatch[1]),
       place: receivedMatch[2].trim(),
-      confidence: "high",
+      confidence: "high" as const,
     };
   }
 
@@ -187,6 +196,7 @@ async function ensureReceiptStub(args: {
         id: ingest_id,
         user_id,
         ts,
+        // stub: subject is allowed temporarily; enrichment overwrites
         place: payload?.data?.subject ?? "ingest",
         amount: 0,
         raw: {
@@ -249,7 +259,12 @@ export async function POST(req: Request) {
 
   if (!event_id || !local_part) {
     return NextResponse.json(
-      { ok: false, where: "payload", message: "Missing required fields", version: VERSION },
+      {
+        ok: false,
+        where: "payload",
+        message: "Missing required fields",
+        version: VERSION,
+      },
       { status: 400 }
     );
   }
@@ -313,39 +328,39 @@ export async function POST(req: Request) {
     );
   }
 
-/* ------------------------------
-   CashApp Enrichment
--------------------------------- */
-const from = payload?.data?.from;
-const subject = payload?.data?.subject;
+  /* ------------------------------
+     CashApp Enrichment
+  -------------------------------- */
+  const from = payload?.data?.from;
+  const subject = payload?.data?.subject;
 
-const isCashApp =
-  typeof from === "string" &&
-  /(cash\.app|square\.com)/i.test(from);
+  const isCashApp =
+    typeof from === "string" && /(cash\.app|square\.com)/i.test(from);
 
-if (isCashApp) {
-  const parsedCash = parseCashAppSubject(subject);
+  if (isCashApp) {
+    const parsedCash = parseCashAppSubject(subject);
 
-  if (parsedCash?.direction === "out") {
-    await supabase
-      .from("receipts")
-      .update({
-        amount: parsedCash.amount,
-        place: parsedCash.place,
-      } as any)
-      .eq("id", ingest_id)
-      .eq("amount", 0);
+    // only overwrite stub zeros; keep idempotent behavior
+    if (parsedCash?.direction === "out") {
+      await supabase
+        .from("receipts")
+        .update({
+          amount: parsedCash.amount,
+          place: parsedCash.place,
+        } as any)
+        .eq("id", ingest_id)
+        .eq("amount", 0);
+    }
   }
-}
 
-return NextResponse.json(
-  {
-    ok: true,
-    receipt_id: ingest_id,
-    event_id,
-    user_id,
-    version: VERSION,
-  },
-  { status: 200 }
-);
+  return NextResponse.json(
+    {
+      ok: true,
+      receipt_id: ingest_id,
+      event_id,
+      user_id,
+      version: VERSION,
+    },
+    { status: 200 }
+  );
 }
