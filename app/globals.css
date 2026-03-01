@@ -24,8 +24,8 @@
   --foreground: var(--text-primary);
   --glow: var(--glow-primary);
 
-  /* Typography */
-  --font-family-base: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  /* Typography — SYSTEM LOCK */
+  --font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-bold: 700;
