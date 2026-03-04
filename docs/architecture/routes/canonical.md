@@ -1,186 +1,165 @@
-# Outflō Routes — Canonical Map
+# OUTFLO — ROUTES (CANONICAL MAP)
 
-This document defines the **canonical route structure** for the Outflō application.
+Status: Locked
 
-Purpose:
-- Prevent route drift
-- Define stable product namespaces
-- Preserve compatibility through legacy redirects
-
-Legacy routes may exist for compatibility but **must never host new functionality**.
+Scope  
+Canonical route structure, stable namespaces, auth surface boundaries, and legacy redirects.
 
 ---
 
-# Routing Model
+## 1. Purpose
 
-Outflō uses the **Next.js App Router**.
+Prevent route drift, define stable product namespaces, and preserve compatibility through legacy redirects.
+
+Legacy routes may exist for compatibility but must never host new functionality.
+
+---
+
+## 2. Core Model
+
+Outflō uses the Next.js App Router.
 
 Routing is implemented through the filesystem under:
 
-```
-app/
-```
+    app/
 
 Dynamic route segments follow Next.js conventions:
 
-```
-[id]
-[slug]
-[...slug]
-```
+    [id]
+    [slug]
+    [...slug]
 
-Routing architecture is defined here.  
+Routing architecture is defined in this document.  
 Filesystem naming rules are defined separately in:
 
-```
-docs/conventions/naming-canon.md
-```
+    docs/conventions/naming-canon.md
 
 ---
 
-# Canonical Namespaces
+## 3. Invariants
 
-The application is divided into stable route namespaces.
+- Namespaces remain stable.
+- Protected namespaces must not leak unprotected pages.
+- Legacy routes must never host new functionality.
+- New functionality must be added only to canonical namespaces.
 
-```
-/           → Public surface
-/app/*      → Authenticated product
-/account/*  → User identity surfaces
-/tools/*    → Calculators + derived utilities
-/admin/*    → Administrative operations
-/api/*      → Backend route handlers
-```
+---
+
+## 4. Contracts
+
+### 4.1 Canonical Namespaces
+
+    /           → Public surface
+    /app/*      → Authenticated product
+    /account/*  → User identity surfaces
+    /tools/*    → Calculators + derived utilities
+    /admin/*    → Administrative operations
+    /api/*      → Backend route handlers
 
 Each namespace has a specific responsibility and should remain stable.
 
 ---
 
-# Public Routes
+### 4.2 Public Routes
 
 Accessible without authentication.
 
-```
-/                → Public home surface
-/login           → Login page
-/auth/callback   → Supabase auth callback
-/logout          → Logout route
-/reset           → Password reset flow
-```
+    /                → Public home surface
+    /login           → Login page
+    /auth/callback   → Supabase auth callback
+    /logout          → Logout route
+    /reset           → Password reset flow
 
 Public routes should remain minimal and act as entry points into the product.
 
 ---
 
-# Authenticated Product Namespace
+### 4.3 Authenticated Product Namespace
 
 Primary product surfaces live under:
 
-```
-/app/*
-```
+    /app/*
 
 Authentication is enforced by:
 
-```
-app/app/layout.tsx
-```
+    app/app/layout.tsx
 
 Canonical routes:
 
-```
-/app/systems      → Product launcher
-/app/money        → Money substrate root
-/app/time         → System clock / runtime
-/app/profile      → User profile
-```
+    /app/systems      → Product launcher
+    /app/money        → Money substrate root
+    /app/time         → System clock / runtime
+    /app/profile      → User profile
 
 ---
 
-# Money Substrate
-
-Primary Outflō product system.
+### 4.4 Money Substrate
 
 Root:
 
-```
-/app/money
-```
+    /app/money
 
 Subroutes:
 
-```
-/app/money/receipts
-/app/money/receipts/[id]
+    /app/money/receipts
+    /app/money/receipts/[id]
 
-/app/money/day/[key]
+    /app/money/day/[key]
 
-/app/money/place/[slug]
+    /app/money/place/[slug]
 
-/app/money/about
-```
+    /app/money/about
 
-These routes are primarily **auto-generated views derived from ledger state**.
+These routes are primarily auto-generated views derived from ledger state.
 
 ---
 
-# Tools Namespace
+### 4.5 Tools Namespace
 
 Tools are utilities derived from product data.
 
 Protected via:
 
-```
-app/tools/layout.tsx
-```
+    app/tools/layout.tsx
 
 Canonical routes:
 
-```
-/tools
-/tools/gain
-/tools/compression
-```
+    /tools
+    /tools/gain
+    /tools/compression
 
-Tools should remain **stateless utilities**, not core product systems.
+Tools should remain stateless utilities, not core product systems.
 
 ---
 
-# Account Namespace
+### 4.6 Account Namespace
 
 Identity and user configuration.
 
 Protected via:
 
-```
-app/account/layout.tsx
-```
+    app/account/layout.tsx
 
 Canonical routes:
 
-```
-/account/profile
-/account/email-mirror
-```
+    /account/profile
+    /account/email-mirror
 
 Account routes manage user identity and configuration only.
 
 ---
 
-# Admin Namespace
+### 4.7 Admin Namespace
 
 Administrative operations.
 
 Protected via:
 
-```
-app/admin/layout.tsx
-```
+    app/admin/layout.tsx
 
 Canonical routes:
 
-```
-/admin
-```
+    /admin
 
 Admin operations may include:
 
@@ -193,101 +172,91 @@ Admin surfaces must remain isolated from normal product flows.
 
 ---
 
-# API Namespace
+### 4.8 API Namespace
 
 Server-side operations.
 
 All API endpoints live under:
 
-```
-/api/*
-```
+    /api/*
 
 Example endpoints:
 
-```
-/api/ingest/resend
-/api/receipts
-/api/receipts/[id]
-/api/outflows
-/api/email-mirror/*
-/api/admin/*
-```
+    /api/ingest/resend
+    /api/receipts
+    /api/receipts/[id]
+    /api/outflows
+    /api/email-mirror/*
+    /api/admin/*
 
 API routes use the Next.js route handler pattern:
 
-```
-route.ts
-```
+    route.ts
 
 ---
 
-# Legacy Redirect Layer
+## 5. Operational Rules
+
+### 5.1 Legacy Redirect Layer
 
 Legacy routes are preserved through redirects for compatibility.
 
-They must **never contain product logic**.
+They must never contain product logic.
 
 ---
 
-## 365 Era (Deprecated)
+#### 365 Era (Deprecated)
 
-```
-/365 → /app/money
-/365/* → /app/money/*
-```
+    /365   → /app/money
+    /365/* → /app/money/*
 
 ---
 
-## Former Root Routes
+#### Former Root Routes
 
-```
-/systems   → /app/systems
-/profile   → /account/profile
-/state     → /tools/gain
-/merchant  → /tools/compression
-/calculate → /tools
-/export    → /admin
-```
+    /systems   → /app/systems
+    /profile   → /account/profile
+    /state     → /tools/gain
+    /merchant  → /tools/compression
+    /calculate → /tools
+    /export    → /admin
 
 ---
 
-## Former Engine Nesting
+#### Former Engine Nesting
 
-```
-/app/money/engine → /app/money
-```
+    /app/money/engine → /app/money
 
 ---
 
-# Namespace Rules (Locked)
+### 5.2 Namespace Rules (Locked)
 
 1. Substrates live under `/app/*`
 2. Tools live under `/tools/*`
 3. Identity lives under `/account/*`
 4. Administrative operations live under `/admin/*`
 5. API routes live under `/api/*`
-6. Legacy routes exist **only for redirects**
+6. Legacy routes exist only for redirects
 
 ---
 
-# Authentication Model
+### 5.3 Authentication Model
 
-Authentication is enforced via **namespace layout gates**.
+Authentication is enforced via namespace layout gates:
 
-```
-app/app/layout.tsx
-app/tools/layout.tsx
-app/account/layout.tsx
-app/admin/layout.tsx
-```
+    app/app/layout.tsx
+    app/tools/layout.tsx
+    app/account/layout.tsx
+    app/admin/layout.tsx
 
 This approach ensures new routes cannot accidentally bypass authentication.
 
 ---
 
-# Invariant
+## 6. System Summary
 
-All new functionality must be added to **canonical namespaces**.
+Outflō routing is namespace-driven and enforced by layout gates. Canonical namespaces define where the product lives; legacy routes exist only as redirects to preserve compatibility.
 
-Legacy routes must only redirect.
+---
+
+End of Document.
