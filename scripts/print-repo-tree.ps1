@@ -1,23 +1,28 @@
-/* ==========================================================
-   OUTFLO — REPOSITORY TREE PRINTER
-   File: scripts/print-repo-tree.ps1
-   Scope: Generate a stable repository filesystem snapshot
-   ========================================================== */
+# ==========================================================
+# OUTFLO - REPOSITORY TREE PRINTER
+# File: scripts/print-repo-tree.ps1
+# Scope: Generate a stable repository filesystem snapshot
+# ==========================================================
 
 param(
-  [switch]$WriteToDocs
+  [switch]$WriteToDocs,
+  [int]$MaxDepth = 4
 )
 
 $ErrorActionPreference = "Stop"
 
-# Resolve repo root
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-Set-Location $repoRoot
+# ------------------------------
+# Repo Root
+# ------------------------------
+$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+Set-Location $RepoRoot
 
-$outPath = Join-Path $repoRoot "docs\repo-tree.txt"
+$OutPath = Join-Path $RepoRoot "docs\repo-tree.txt"
 
-# Top-level directories to show
-$roots = @(
+# ------------------------------
+# Config
+# ------------------------------
+$IncludeRoots = @(
   "app",
   "components",
   "hooks",
@@ -27,60 +32,101 @@ $roots = @(
   "scripts"
 )
 
-# Excluded directories
-$excludeDirs = @(
+$ExcludeDirs = @(
   "node_modules",
   ".next",
-  ".git"
+  ".git",
+  ".vercel",
+  ".turbo",
+  "dist",
+  "build",
+  "out"
 )
 
-function Should-Skip($path) {
-  foreach ($dir in $excludeDirs) {
-    if ($path -match ("[\\\/]" + [Regex]::Escape($dir) + "([\\\/]|$)")) {
-      return $true
-    }
+# ------------------------------
+# Helpers
+# ------------------------------
+function Is-ExcludedPath {
+  param([string]$FullName)
+
+  foreach ($d in $ExcludeDirs) {
+    $pattern = "(^|\\)$([Regex]::Escape($d))(\\|$)"
+    if ($FullName -match $pattern) { return $true }
   }
   return $false
 }
 
-function Print-Tree($dir, $prefix = "") {
+function Get-Children {
+  param([string]$Path)
 
-  if (!(Test-Path $dir)) {
-    Write-Output "$prefix$dir/ (missing)"
-    return
-  }
+  Get-ChildItem -LiteralPath $Path -Force |
+    Where-Object { -not (Is-ExcludedPath $_.FullName) } |
+    Sort-Object @{ Expression = { -not $_.PSIsContainer } }, Name
+}
 
-  Write-Output "$prefix$dir/"
+function Print-Node {
+  param(
+    [string]$Path,
+    [string]$Prefix,
+    [int]$Depth,
+    [int]$LimitDepth
+  )
 
-  $items = Get-ChildItem $dir | Sort-Object @{Expression = { -not $_.PSIsContainer }}, Name
+  if ($Depth -gt $LimitDepth) { return @() }
 
-  foreach ($item in $items) {
+  $lines = @()
+  $items = @(Get-Children -Path $Path)
 
-    if (Should-Skip $item.FullName) { continue }
+  for ($i = 0; $i -lt $items.Count; $i++) {
+    $item = $items[$i]
+    $isLast = ($i -eq $items.Count - 1)
+
+    $branch = "+-- "
+    $nextPrefix = $Prefix + $(if ($isLast) { "    " } else { "|   " })
 
     if ($item.PSIsContainer) {
-      Write-Output "$prefix  ├─ $($item.Name)/"
-    }
-    else {
-      Write-Output "$prefix  ├─ $($item.Name)"
+      $lines += ($Prefix + $branch + $item.Name + "\")
+      $lines += Print-Node -Path $item.FullName -Prefix $nextPrefix -Depth ($Depth + 1) -LimitDepth $LimitDepth
+    } else {
+      $lines += ($Prefix + $branch + $item.Name)
     }
   }
+
+  return $lines
 }
 
-$lines = @()
-$lines += "OUTFLO — REPOSITORY TREE"
-$lines += "Generated: $(Get-Date)"
-$lines += ""
+# ------------------------------
+# Build Output
+# ------------------------------
+$Lines = @()
+$Lines += "OUTFLO - REPOSITORY TREE"
+$Lines += ("Generated: " + (Get-Date).ToString("yyyy-MM-dd HH:mm:ss"))
+$Lines += ("Root: " + $RepoRoot)
+$Lines += ""
 
-foreach ($root in $roots) {
-  $lines += Print-Tree $root
-  $lines += ""
+foreach ($root in $IncludeRoots) {
+  $full = Join-Path $RepoRoot $root
+
+  if (!(Test-Path $full)) {
+    $Lines += ($root + "\ (missing)")
+    $Lines += ""
+    continue
+  }
+
+  $Lines += ($root + "\")
+  $Lines += Print-Node -Path $full -Prefix "" -Depth 1 -LimitDepth $MaxDepth
+  $Lines += ""
 }
 
+# ------------------------------
+# Output
+# ------------------------------
 if ($WriteToDocs) {
-  $lines | Set-Content $outPath
-  Write-Host "Repository tree written to docs/repo-tree.txt"
-}
-else {
-  $lines
+  $docsDir = Split-Path $OutPath -Parent
+  if (!(Test-Path $docsDir)) { New-Item -ItemType Directory -Path $docsDir | Out-Null }
+
+  $Lines | Set-Content -Path $OutPath -Encoding UTF8
+  Write-Host ("Wrote: " + $OutPath)
+} else {
+  $Lines | ForEach-Object { Write-Output $_ }
 }
