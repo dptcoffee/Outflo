@@ -92,10 +92,11 @@ export default async function AccountProfilePage() {
               placeItems: "center",
               fontSize: 28,
               fontWeight: 700,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(255,255,255,0.04)",
-            }}
-          >
+              color: "#fff",
+              background: "linear-gradient(135deg,#3b82f6,#06b6d4)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              }}
+>
             {fallbackLetter}
           </div>
         )}
@@ -154,9 +155,9 @@ export default async function AccountProfilePage() {
         }}
       >
         <NavRow href="/account/profile/edit" label="Environment" />
-        <NavRow href="/account/email-mirror" label="Email Mirror" />
-        <StaticRow label="Support" value="Soon" />
-        <StaticRow label="Legal" value="Soon" />
+        <NavRow href="/account/profile" label="Email Mirror" />
+        <NavRow href="/account/profile" label="Support" />
+        <NavRow href="/account/profile" label="Legal" />
       </section>
     </main>
   );

@@ -17,7 +17,7 @@ import { useSwipe } from "../hooks/use-swipe";
 /* ------------------------------
    Constants
 -------------------------------- */
-const ROUTES = ["/", "/app/systems", "/app/time", "/account/profile"];
+const ROUTES = ["/", "/app/systems", "/app/time"];
 
 /* ------------------------------
    Helpers
@@ -95,12 +95,6 @@ export default function SwipeShell({ children }: { children: ReactNode }) {
               href="/app/time"
               active={pathname === "/app/time"}
               label="Time"
-            />
-
-            <Pill
-              href="/account/profile"
-              active={pathname === "/account/profile"}
-              label="Home"
             />
           </div>
         </nav>
