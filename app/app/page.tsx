@@ -12,7 +12,7 @@ export default function IdentityPage() {
 
       <div style={{ marginTop: 28, display: "flex", gap: 12 }}>
         <Link href="/app/systems" style={{ color: "white" }}>Systems →</Link>
-        <Link href="/app/profile" style={{ color: "white", opacity: 0.8 }}>Profile →</Link>
+        <Link href="/account/profile" style={{ color: "white", opacity: 0.8 }}>Profile →</Link>
       </div>
     </main>
   );

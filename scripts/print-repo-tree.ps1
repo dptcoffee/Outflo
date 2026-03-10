@@ -6,7 +6,7 @@
 
 param(
   [switch]$WriteToDocs,
-  [int]$MaxDepth = 4
+  [int]$MaxDepth = 6
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,7 +40,12 @@ $ExcludeDirs = @(
   ".turbo",
   "dist",
   "build",
-  "out"
+  "out",
+  "coverage"
+)
+
+$ExcludeFiles = @(
+  ".DS_Store"
 )
 
 # ------------------------------
@@ -53,14 +58,28 @@ function Is-ExcludedPath {
     $pattern = "(^|\\)$([Regex]::Escape($d))(\\|$)"
     if ($FullName -match $pattern) { return $true }
   }
+
   return $false
+}
+
+function Is-ExcludedFile {
+  param([string]$Name)
+
+  return $ExcludeFiles -contains $Name
 }
 
 function Get-Children {
   param([string]$Path)
 
   Get-ChildItem -LiteralPath $Path -Force |
-    Where-Object { -not (Is-ExcludedPath $_.FullName) } |
+    Where-Object {
+      if ($_.PSIsContainer) {
+        -not (Is-ExcludedPath $_.FullName)
+      }
+      else {
+        (-not (Is-ExcludedPath $_.FullName)) -and (-not (Is-ExcludedFile $_.Name))
+      }
+    } |
     Sort-Object @{ Expression = { -not $_.PSIsContainer } }, Name
 }
 
@@ -87,7 +106,8 @@ function Print-Node {
     if ($item.PSIsContainer) {
       $lines += ($Prefix + $branch + $item.Name + "\")
       $lines += Print-Node -Path $item.FullName -Prefix $nextPrefix -Depth ($Depth + 1) -LimitDepth $LimitDepth
-    } else {
+    }
+    else {
       $lines += ($Prefix + $branch + $item.Name)
     }
   }
@@ -123,10 +143,13 @@ foreach ($root in $IncludeRoots) {
 # ------------------------------
 if ($WriteToDocs) {
   $docsDir = Split-Path $OutPath -Parent
-  if (!(Test-Path $docsDir)) { New-Item -ItemType Directory -Path $docsDir | Out-Null }
+  if (!(Test-Path $docsDir)) {
+    New-Item -ItemType Directory -Path $docsDir | Out-Null
+  }
 
   $Lines | Set-Content -Path $OutPath -Encoding UTF8
   Write-Host ("Wrote: " + $OutPath)
-} else {
+}
+else {
   $Lines | ForEach-Object { Write-Output $_ }
 }
