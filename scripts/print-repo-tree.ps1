@@ -1,7 +1,7 @@
 # ==========================================================
 # OUTFLO - REPOSITORY TREE PRINTER
 # File: scripts/print-repo-tree.ps1
-# Scope: Generate a stable repository filesystem snapshot
+# Scope: Generate current repository tree and timestamped snapshots
 # ==========================================================
 
 param(
@@ -12,12 +12,16 @@ param(
 $ErrorActionPreference = "Stop"
 
 # ------------------------------
-# Repo Root
+# Repo Root + Output Paths
 # ------------------------------
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 
-$OutPath = Join-Path $RepoRoot "docs\repo-tree.txt"
+$RepositoryDir = Join-Path $RepoRoot "docs\repository"
+$CurrentDir = Join-Path $RepositoryDir "current"
+$SnapshotsDir = Join-Path $RepositoryDir "snapshots"
+
+$CurrentOutPath = Join-Path $CurrentDir "repository-tree.txt"
 
 # ------------------------------
 # Config
@@ -56,7 +60,9 @@ function Is-ExcludedPath {
 
   foreach ($d in $ExcludeDirs) {
     $pattern = "(^|\\)$([Regex]::Escape($d))(\\|$)"
-    if ($FullName -match $pattern) { return $true }
+    if ($FullName -match $pattern) {
+      return $true
+    }
   }
 
   return $false
@@ -91,7 +97,9 @@ function Print-Node {
     [int]$LimitDepth
   )
 
-  if ($Depth -gt $LimitDepth) { return @() }
+  if ($Depth -gt $LimitDepth) {
+    return @()
+  }
 
   $lines = @()
   $items = @(Get-Children -Path $Path)
@@ -115,19 +123,35 @@ function Print-Node {
   return $lines
 }
 
+function Ensure-Directory {
+  param([string]$Path)
+
+  if (!(Test-Path -LiteralPath $Path)) {
+    New-Item -ItemType Directory -Path $Path | Out-Null
+  }
+}
+
 # ------------------------------
 # Build Output
 # ------------------------------
+$Now = Get-Date
+$UnixTime = [DateTimeOffset]$Now
+$UnixSeconds = $UnixTime.ToUnixTimeSeconds()
+$HumanStamp = $Now.ToString("yyyy-MM-dd_HH-mm")
+$SnapshotFileName = "$UnixSeconds" + "__" + "$HumanStamp.txt"
+$SnapshotOutPath = Join-Path $SnapshotsDir $SnapshotFileName
+
 $Lines = @()
 $Lines += "OUTFLO - REPOSITORY TREE"
-$Lines += ("Generated: " + (Get-Date).ToString("yyyy-MM-dd HH:mm:ss"))
+$Lines += ("Generated: " + $Now.ToString("yyyy-MM-dd HH:mm:ss"))
+$Lines += ("Unix: " + $UnixSeconds)
 $Lines += ("Root: " + $RepoRoot)
 $Lines += ""
 
 foreach ($root in $IncludeRoots) {
   $full = Join-Path $RepoRoot $root
 
-  if (!(Test-Path $full)) {
+  if (!(Test-Path -LiteralPath $full)) {
     $Lines += ($root + "\ (missing)")
     $Lines += ""
     continue
@@ -142,13 +166,15 @@ foreach ($root in $IncludeRoots) {
 # Output
 # ------------------------------
 if ($WriteToDocs) {
-  $docsDir = Split-Path $OutPath -Parent
-  if (!(Test-Path $docsDir)) {
-    New-Item -ItemType Directory -Path $docsDir | Out-Null
-  }
+  Ensure-Directory -Path $RepositoryDir
+  Ensure-Directory -Path $CurrentDir
+  Ensure-Directory -Path $SnapshotsDir
 
-  $Lines | Set-Content -Path $OutPath -Encoding UTF8
-  Write-Host ("Wrote: " + $OutPath)
+  $Lines | Set-Content -Path $CurrentOutPath -Encoding UTF8
+  $Lines | Set-Content -Path $SnapshotOutPath -Encoding UTF8
+
+  Write-Host ("Wrote current tree: " + $CurrentOutPath)
+  Write-Host ("Wrote snapshot: " + $SnapshotOutPath)
 }
 else {
   $Lines | ForEach-Object { Write-Output $_ }
