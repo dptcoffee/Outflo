@@ -96,13 +96,13 @@ export default async function ProfilePage() {
     <main
       style={{
         minHeight: "100vh",
-        padding: "24px 20px 40px",
+        padding: "20px 20px 40px",
       }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: 720,
+          maxWidth: "100vh",
           margin: "0 auto",
         }}
       >
