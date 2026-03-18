@@ -1,83 +1,84 @@
 /* ==========================================================
    OUTFLO — GLOBAL STYLESHEET
    File: app/globals.css
-   Scope: Theme tokens, base resets, and global behavioral fixes
+   Scope: Foundation only — tokens, reset, and base behavior
    ========================================================== */
 
 /* ------------------------------
-   TAILWIND IMPORT
--------------------------------- */
-@import "tailwindcss";
-
-/* ------------------------------
-   ROOT THEME VARIABLES (Locked Dark)
+   ROOT TOKENS (Dark — Locked)
 -------------------------------- */
 :root {
-  /* Core Identity Tokens */
+  /* Core Identity */
   --bg-primary: #000000;
   --text-primary: #FFFEFA;
-  --text-secondary: #9CA3AF; /* global gray token */
+  --text-secondary: #7A7A7A;
+  --border-subtle: rgba(255, 255, 255, 0.08);
   --glow-primary: rgba(255, 254, 250, 0.08);
 
-  /* Alias (Backward Compatibility) */
-  --background: var(--bg-primary);
-  --foreground: var(--text-primary);
-  --glow: var(--glow-primary);
-
-  /* Typography — SYSTEM LOCK */
-  --font-family-base: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  /* Typography */
+  --font-family-base: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
   --font-weight-regular: 400;
   --font-weight-medium: 500;
-  --font-weight-bold: 700;
+  --font-weight-semibold: 600;
 
   color-scheme: dark;
 }
 
 /* ------------------------------
-   THEME BINDINGS (Tailwind Inline)
+   RESET
 -------------------------------- */
-@theme inline {
-  --color-background: var(--bg-primary);
-  --color-foreground: var(--text-primary);
-  --font-sans: var(--font-family-base);
-}
-
-/* ------------------------------
-   OPTIONAL: LIGHT MODE (Accents Only)
--------------------------------- */
-@media (prefers-color-scheme: light) {
-  :root {
-    --glow-primary: rgba(0, 0, 0, 0.06);
-  }
-}
-
-/* ------------------------------
-   GLOBAL RESET + STRUCTURE
--------------------------------- */
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 html,
 body {
   height: 100%;
-  background: var(--bg-primary);
-  color: var(--text-primary);
   margin: 0;
   padding: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 body {
   min-height: 100vh;
-  background: var(--bg-primary);
-  color: var(--text-primary);
   font-family: var(--font-family-base);
   font-weight: var(--font-weight-regular);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ------------------------------
-   MOBILE BEHAVIOR FIX
+   ELEMENT BASELINE
+-------------------------------- */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* ------------------------------
+   MOBILE INPUT FIX
 -------------------------------- */
 @media (pointer: coarse) {
   input,

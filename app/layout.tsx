@@ -8,21 +8,17 @@
    Imports
 -------------------------------- */
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import SwipeShell from "@/components/SwipeShell";
 
 /* ------------------------------
    Fonts
 -------------------------------- */
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
 });
 
 /* ------------------------------
@@ -48,7 +44,37 @@ export const metadata: Metadata = {
    Viewport
 -------------------------------- */
 export const viewport: Viewport = {
-  themeColor: "#0B0B0C",
+  themeColor: "#000000",
+};
+
+/* ------------------------------
+   Constants
+-------------------------------- */
+const BODY_STYLE: React.CSSProperties = {
+  minHeight: "100dvh",
+  width: "100%",
+  overflowX: "hidden",
+  background: "#000000",
+  color: "#FFFEFA",
+};
+
+const FRAME_STYLE: React.CSSProperties = {
+  minHeight: "100dvh",
+  width: "100%",
+  background: "#000000",
+};
+
+const MAIN_STYLE: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 520,
+  margin: "0 auto",
+  paddingTop: 16,
+  paddingBottom: 16,
+  paddingLeft: "calc(16px + env(safe-area-inset-left))",
+  paddingRight: "calc(16px + env(safe-area-inset-right))",
+  boxSizing: "border-box",
+  background: "#000000",
+  color: "#FFFEFA",
 };
 
 /* ------------------------------
@@ -60,43 +86,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
-      <body
-        className={[
-          geistSans.variable,
-          geistMono.variable,
-          "antialiased",
-          "h-full",
-          "min-h-[100dvh]",
-          "w-full",
-          "overflow-x-hidden",
-          "bg-black",
-          "text-white",
-        ].join(" ")}
-      >
+    <html lang="en" className={ibmPlexSans.className}>
+      <body style={BODY_STYLE}>
         <SwipeShell>
           {/* GLOBAL FRAME CONTRACT */}
-          <div className="min-h-[100dvh] w-full bg-black">
-            <main
-              className={[
-                "w-full",
-                "max-w-[520px]",
-                "mx-auto",
-                "py-4",
-                "box-border",
-                "bg-black",
-                "text-white",
-                "px-[calc(16px+env(safe-area-inset-left))]",
-                "pr-[calc(16px+env(safe-area-inset-right))]",
-              ].join(" ")}
-            >
-              {children}
-            </main>
+          <div style={FRAME_STYLE}>
+            <main style={MAIN_STYLE}>{children}</main>
           </div>
         </SwipeShell>
       </body>
     </html>
   );
 }
-
-
