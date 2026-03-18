@@ -1,6 +1,6 @@
 ﻿OUTFLO - REPOSITORY TREE
-Generated: 2026-03-17 23:54:08
-Unix: 1773806048
+Generated: 2026-03-17 20:41:22
+Unix: 1773794482
 Root: C:\dev\Outflo
 
 app\
@@ -156,6 +156,7 @@ lib\
 +-- weather\
 |   +-- get-weather.ts
 +-- epoch.ts
++-- receipts.ts
 +-- time.ts
 
 public\
@@ -174,7 +175,6 @@ docs\
 +-- architecture\
 |   +-- ai\
 |   |   +-- thread-transition\
-|   |       +-- thread-transition-sop.md
 |   |       +-- thread-transition-v1.md
 |   +-- compute\
 |   |   +-- outflo-computation\
@@ -245,7 +245,6 @@ docs\
 |   |   +-- 1773767482__2026-03-17_13-11.txt
 |   |   +-- 1773768565__2026-03-17_13-29.txt
 |   |   +-- 1773776319__2026-03-17_15-38.txt
-|   |   +-- 1773794482__2026-03-17_20-41.txt
 |   +-- README.md
 +-- README.md
 

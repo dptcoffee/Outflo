@@ -1,7 +1,20 @@
+/* ==========================================================
+   OUTFLO — ADMIN NAMESPACE LAYOUT (PROTECTED)
+   File: app/admin/layout.tsx
+   Scope: Protects /admin/*
+   Behavior: Logged out → Portal (/)
+   ========================================================== */
+
+/* ------------------------------
+   Imports
+-------------------------------- */
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 
-export default async function ProtectedLayout({
+/* ------------------------------
+   Layout Gate
+-------------------------------- */
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -9,6 +22,7 @@ export default async function ProtectedLayout({
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getUser();
 
+  // Logged out → redirect to Portal
   if (!data.user) {
     redirect("/");
   }

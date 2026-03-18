@@ -1,13 +1,19 @@
 /* ==========================================================
    OUTFLO — LOGIN (PUBLIC)
    File: app/login/page.tsx
-   Scope: Public entry; redirects to /app/systems if already authed
+   Scope: Public auth entry; redirects to /app/systems if authenticated
    ========================================================== */
 
+/* ------------------------------
+   Imports
+-------------------------------- */
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import LoginClient from "./LoginClient";
 
+/* ------------------------------
+   Component
+-------------------------------- */
 export default async function LoginPage() {
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getUser();
@@ -20,7 +26,6 @@ export default async function LoginPage() {
   // Logged out → render login UI
   return <LoginClient />;
 }
-
 
 
 
