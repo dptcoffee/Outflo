@@ -6,6 +6,6 @@
 
 import { redirect } from "next/navigation";
 
-export default function SystemsRedirect() {
+export default function SystemsRedirect(): never {
   redirect("/app/systems");
 }
